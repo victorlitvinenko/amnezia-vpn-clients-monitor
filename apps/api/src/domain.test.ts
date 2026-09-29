@@ -115,6 +115,22 @@ describe('mergeClients', () => {
     });
   });
 
+  it('displays a stored handshake after restart without marking the client online', () => {
+    const [status] = mergeClients(
+      [{ ...runtimePeer, latestHandshake: 0 }],
+      [],
+      1000,
+      180,
+      new Map(),
+      new Map([['pub-a', 900]])
+    );
+    expect(status).toMatchObject({
+      online: false,
+      latestHandshake: 900,
+      handshakeAgeSeconds: 100
+    });
+  });
+
   it('keeps a runtime peer with missing metadata', () => {
     const [status] = mergeClients([runtimePeer], [], 1000, 180);
     expect(status).toMatchObject({ id: 'pub-a', ip: '10.8.1.2', createdAt: null });

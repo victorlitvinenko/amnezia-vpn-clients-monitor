@@ -17,6 +17,15 @@ interface TotalRow {
   total_bytes: number;
 }
 
+interface HandshakeRow {
+  peer_id: string;
+  latest_handshake: number;
+}
+
+interface TableColumnRow {
+  name: string;
+}
+
 function asCounterRow(value: unknown): CounterRow | undefined {
   if (
     typeof value !== 'object' ||
@@ -55,8 +64,29 @@ function asTotalRow(value: unknown): TotalRow | undefined {
   return { total_bytes: value.total_bytes };
 }
 
+function asHandshakeRow(value: unknown): HandshakeRow | undefined {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('peer_id' in value) ||
+    typeof value.peer_id !== 'string' ||
+    !('latest_handshake' in value) ||
+    typeof value.latest_handshake !== 'number'
+  ) {
+    return undefined;
+  }
+  return { peer_id: value.peer_id, latest_handshake: value.latest_handshake };
+}
+
+function isTableColumnRow(value: unknown): value is TableColumnRow {
+  return (
+    typeof value === 'object' && value !== null && 'name' in value && typeof value.name === 'string'
+  );
+}
+
 export interface StoredTrafficSnapshot {
   trafficByClient: Map<string, ClientTrafficUsage>;
+  lastHandshakeByClient: Map<string, number>;
   totalTodayBytes: number;
 }
 
@@ -86,6 +116,7 @@ export class TrafficStore {
   private readonly database: DatabaseSync;
   private readonly getCounter: StatementSync;
   private readonly upsertCounter: StatementSync;
+  private readonly getLastHandshakes: StatementSync;
   private readonly addDailyUsage: StatementSync;
   private readonly addMonthlyUsage: StatementSync;
   private readonly getDailyUsage: StatementSync;
@@ -111,7 +142,8 @@ export class TrafficStore {
         peer_id TEXT PRIMARY KEY,
         download_bytes INTEGER NOT NULL,
         upload_bytes INTEGER NOT NULL,
-        sampled_at_ms INTEGER NOT NULL
+        sampled_at_ms INTEGER NOT NULL,
+        latest_handshake INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS daily_usage (
         day TEXT NOT NULL,
@@ -128,16 +160,32 @@ export class TrafficStore {
         PRIMARY KEY (month, peer_id)
       );
     `);
+    const counterColumns = this.database
+      .prepare('PRAGMA table_info(peer_counters)')
+      .all()
+      .filter(isTableColumnRow);
+    if (!counterColumns.some((column) => column.name === 'latest_handshake')) {
+      this.database.exec(
+        'ALTER TABLE peer_counters ADD COLUMN latest_handshake INTEGER NOT NULL DEFAULT 0'
+      );
+    }
     this.getCounter = this.database.prepare(
       'SELECT download_bytes, upload_bytes FROM peer_counters WHERE peer_id = ?'
     );
     this.upsertCounter = this.database.prepare(`
-      INSERT INTO peer_counters (peer_id, download_bytes, upload_bytes, sampled_at_ms)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO peer_counters (
+        peer_id, download_bytes, upload_bytes, sampled_at_ms, latest_handshake
+      ) VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(peer_id) DO UPDATE SET
         download_bytes = excluded.download_bytes,
         upload_bytes = excluded.upload_bytes,
-        sampled_at_ms = excluded.sampled_at_ms
+        sampled_at_ms = excluded.sampled_at_ms,
+        latest_handshake = MAX(peer_counters.latest_handshake, excluded.latest_handshake)
+    `);
+    this.getLastHandshakes = this.database.prepare(`
+      SELECT peer_id, latest_handshake
+      FROM peer_counters
+      WHERE latest_handshake > 0
     `);
     this.addDailyUsage = this.database.prepare(`
       INSERT INTO daily_usage (day, peer_id, download_bytes, upload_bytes)
@@ -201,7 +249,13 @@ export class TrafficStore {
           this.addMonthlyUsage.run(periods.month, peer.publicKey, downloadDelta, uploadDelta);
         }
 
-        this.upsertCounter.run(peer.publicKey, downloadBytes, uploadBytes, nowMs);
+        this.upsertCounter.run(
+          peer.publicKey,
+          downloadBytes,
+          uploadBytes,
+          nowMs,
+          counter(peer.latestHandshake)
+        );
       }
       if (!initialized) this.setMeta.run('initialized', '1');
       this.database.exec('COMMIT');
@@ -226,6 +280,11 @@ export class TrafficStore {
   private readSnapshot(peers: readonly AwgPeer[], nowMs: number): StoredTrafficSnapshot {
     const periods = periodKeys(nowMs, this.timeZone);
     const trafficByClient = new Map<string, ClientTrafficUsage>();
+    const lastHandshakeByClient = new Map<string, number>();
+    for (const value of this.getLastHandshakes.all()) {
+      const row = asHandshakeRow(value);
+      if (row) lastHandshakeByClient.set(row.peer_id, row.latest_handshake);
+    }
     for (const peer of peers) {
       const daily = asUsageRow(this.getDailyUsage.get(periods.day, peer.publicKey));
       const monthly = asUsageRow(this.getMonthlyUsage.get(periods.month, peer.publicKey));
@@ -234,6 +293,10 @@ export class TrafficStore {
         downloadMonthBytes: monthly?.download_bytes ?? 0
       });
     }
-    return { trafficByClient, totalTodayBytes: this.readTotalToday(nowMs) };
+    return {
+      trafficByClient,
+      lastHandshakeByClient,
+      totalTodayBytes: this.readTotalToday(nowMs)
+    };
   }
 }

@@ -25,7 +25,7 @@ cat /opt/amnezia/awg/clientsTable
 
 Commands, the container name, and the interface name cannot be supplied through HTTP requests. Runtime data is matched with metadata strictly by `clientId === publicKey`. Traffic statistics are shown from the VPN client's perspective: AWG `txBytes` is download traffic and AWG `rxBytes` is upload traffic.
 
-The backend samples AWG counters in the background. Current counters are used as the initial monthly baseline, while daily accounting starts at zero on the first successful sample. Later counter deltas provide per-client daily and monthly download totals, aggregate daily traffic, and current download/upload rates. The accounting day and calendar month follow `TZ`.
+The backend samples AWG counters in the background. Current counters are used as the initial monthly baseline, while daily accounting starts at zero on the first successful sample. Later counter deltas provide per-client daily and monthly download totals, aggregate daily traffic, and current download/upload rates. The latest nonzero handshake is also persisted so the `Connection` column survives application and VPN container restarts. Persisted handshakes are display history only; online status always comes from the current AWG state. The accounting day and calendar month follow `TZ`.
 
 ## Requirements
 

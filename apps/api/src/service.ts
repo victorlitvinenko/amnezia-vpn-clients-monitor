@@ -136,7 +136,8 @@ export class MonitoringService {
       clients,
       Math.floor(sampledAtMs / 1000),
       this.config.onlineThresholdSeconds,
-      stored.trafficByClient
+      stored.trafficByClient,
+      stored.lastHandshakeByClient
     );
     this.runtimeSnapshot = { peers, sampledAtMs };
     this.stats = {

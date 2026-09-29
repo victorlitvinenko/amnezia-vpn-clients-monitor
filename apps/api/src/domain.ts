@@ -91,20 +91,22 @@ function statusFor(
   client: ClientMetadata | undefined,
   peer: AwgPeer | undefined,
   traffic: ClientTrafficUsage | undefined,
+  storedHandshake: number | undefined,
   nowUnix: number,
   threshold: number
 ): ClientStatus {
-  const handshake = peer?.latestHandshake ?? 0;
-  const hasHandshake = handshake > 0;
+  const runtimeHandshake = peer?.latestHandshake ?? 0;
+  const displayHandshake = runtimeHandshake > 0 ? runtimeHandshake : (storedHandshake ?? 0);
+  const hasHandshake = displayHandshake > 0;
   const fallbackName = stripCidr(peer?.allowedIps ?? null) ?? id;
 
   return {
     id,
     name: client?.userData?.clientName?.trim() || fallbackName,
     ip: stripCidr(peer?.allowedIps || client?.userData?.allowed_ips || null),
-    online: isOnline(handshake, nowUnix, threshold),
-    latestHandshake: hasHandshake ? handshake : null,
-    handshakeAgeSeconds: hasHandshake ? Math.max(0, nowUnix - handshake) : null,
+    online: isOnline(runtimeHandshake, nowUnix, threshold),
+    latestHandshake: hasHandshake ? displayHandshake : null,
+    handshakeAgeSeconds: hasHandshake ? Math.max(0, nowUnix - displayHandshake) : null,
     endpoint: peer?.endpoint ?? null,
     downloadTodayBytes: traffic?.downloadTodayBytes ?? 0,
     downloadMonthBytes: traffic?.downloadMonthBytes ?? 0,
@@ -117,7 +119,8 @@ export function mergeClients(
   clients: readonly ClientMetadata[],
   nowUnix: number,
   threshold: number,
-  trafficByClient: ReadonlyMap<string, ClientTrafficUsage> = new Map()
+  trafficByClient: ReadonlyMap<string, ClientTrafficUsage> = new Map(),
+  lastHandshakeByClient: ReadonlyMap<string, number> = new Map()
 ): ClientStatus[] {
   const peersByKey = new Map(peers.map((peer) => [peer.publicKey, peer]));
   const clientsByKey = new Map(clients.map((client) => [client.clientId, client]));
@@ -128,6 +131,7 @@ export function mergeClients(
       clientsByKey.get(id),
       peersByKey.get(id),
       trafficByClient.get(id),
+      lastHandshakeByClient.get(id),
       nowUnix,
       threshold
     )

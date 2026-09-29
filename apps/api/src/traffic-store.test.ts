@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -14,12 +15,12 @@ afterEach(() => {
   }
 });
 
-function peer(txBytes: number, rxBytes: number): AwgPeer {
+function peer(txBytes: number, rxBytes: number, latestHandshake = 0): AwgPeer {
   return {
     publicKey: 'pub-a',
     endpoint: null,
     allowedIps: '10.8.1.2/32',
-    latestHandshake: 0,
+    latestHandshake,
     rxBytes,
     txBytes
   };
@@ -103,5 +104,43 @@ describe('TrafficStore', () => {
     });
     expect(afterRestart.totalTodayBytes).toBe(360);
     secondStore.close();
+  });
+
+  it('keeps the last nonzero handshake after a restart', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'awg-monitor-'));
+    temporaryDirectories.push(directory);
+    const path = join(directory, 'traffic.sqlite');
+    const start = Date.UTC(2026, 8, 29, 9);
+
+    const firstStore = new TrafficStore(path, 'Europe/Moscow');
+    firstStore.applySnapshot([peer(1_000, 200, 1_780_000_000)], start);
+    firstStore.close();
+
+    const secondStore = new TrafficStore(path, 'Europe/Moscow');
+    const afterRestart = secondStore.applySnapshot([peer(1_100, 250, 0)], start + 5_000);
+    expect(afterRestart.lastHandshakeByClient.get('pub-a')).toBe(1_780_000_000);
+    secondStore.close();
+  });
+
+  it('migrates an existing traffic database without handshake history', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'awg-monitor-'));
+    temporaryDirectories.push(directory);
+    const path = join(directory, 'traffic.sqlite');
+    const legacyDatabase = new DatabaseSync(path);
+    legacyDatabase.exec(`
+      CREATE TABLE peer_counters (
+        peer_id TEXT PRIMARY KEY,
+        download_bytes INTEGER NOT NULL,
+        upload_bytes INTEGER NOT NULL,
+        sampled_at_ms INTEGER NOT NULL
+      );
+      INSERT INTO peer_counters VALUES ('pub-a', 1000, 200, 0);
+    `);
+    legacyDatabase.close();
+
+    const store = new TrafficStore(path, 'Europe/Moscow');
+    const snapshot = store.applySnapshot([peer(1_100, 250, 1_780_000_000)], Date.now());
+    expect(snapshot.lastHandshakeByClient.get('pub-a')).toBe(1_780_000_000);
+    store.close();
   });
 });
