@@ -4,6 +4,18 @@ import Docker from 'dockerode';
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
+interface CpuStatsSnapshot {
+  cpu_stats: {
+    cpu_usage: { total_usage: number; percpu_usage?: number[] };
+    system_cpu_usage: number;
+    online_cpus?: number;
+  };
+  precpu_stats: {
+    cpu_usage: { total_usage: number };
+    system_cpu_usage: number;
+  };
+}
+
 function collect(stream: PassThrough): Promise<string> {
   const chunks: Buffer[] = [];
   stream.on('data', (chunk: Buffer | string) => {
@@ -84,4 +96,28 @@ export function getAwgDump(containerName: string, interfaceName: string): Promis
 
 export function getClientsTable(containerName: string): Promise<string> {
   return execInAmneziaContainer(containerName, ['cat', '/opt/amnezia/awg/clientsTable']);
+}
+
+export function calculateCpuPercent(stats: CpuStatsSnapshot): number {
+  const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
+  const systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
+  const cpuCount =
+    stats.cpu_stats.online_cpus ?? stats.cpu_stats.cpu_usage.percpu_usage?.length ?? 1;
+
+  if (
+    !Number.isFinite(cpuDelta) ||
+    !Number.isFinite(systemDelta) ||
+    !Number.isFinite(cpuCount) ||
+    cpuDelta <= 0 ||
+    systemDelta <= 0 ||
+    cpuCount <= 0
+  ) {
+    return 0;
+  }
+  return (cpuDelta / systemDelta) * cpuCount * 100;
+}
+
+export async function getContainerCpuPercent(containerName: string): Promise<number> {
+  const stats = await docker.getContainer(containerName).stats({ stream: false });
+  return calculateCpuPercent(stats);
 }

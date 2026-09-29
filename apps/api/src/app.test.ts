@@ -24,6 +24,30 @@ describe('API', () => {
     expect(response.json()).toEqual({ status: 'ok' });
   });
 
+  it('returns the AmneziaWG container CPU load', async () => {
+    app = await buildApp({
+      config,
+      getClients: async () => [],
+      getCpuPercent: async () => 12.5
+    });
+    const response = await app.inject({ method: 'GET', url: '/api/stats' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ cpuPercent: 12.5 });
+  });
+
+  it('returns a safe JSON error when container stats are unavailable', async () => {
+    app = await buildApp({
+      config,
+      getClients: async () => [],
+      getCpuPercent: async () => {
+        throw new Error('socket detail');
+      }
+    });
+    const response = await app.inject({ method: 'GET', url: '/api/stats' });
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: 'Unable to read AmneziaWG container stats' });
+  });
+
   it('returns a safe JSON error when the data source fails', async () => {
     app = await buildApp({
       config,

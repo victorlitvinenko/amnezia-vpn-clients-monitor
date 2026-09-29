@@ -18,3 +18,7 @@ export interface ApiError {
 export interface HealthResponse {
   status: 'ok';
 }
+
+export interface ContainerStats {
+  cpuPercent: number;
+}

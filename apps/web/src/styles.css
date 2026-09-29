@@ -72,15 +72,35 @@ h1 {
   color: #4c5665;
 }
 
+.header-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.cpu-load,
 .refresh {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
   color: #7d899a;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.09em;
+}
+
+.cpu-load {
+  padding-right: 16px;
+  border-right: 1px solid #29313d;
+  font-variant-numeric: tabular-nums;
+}
+
+.cpu-load strong {
+  min-width: 42px;
+  color: #c5ccd6;
+  font-weight: 650;
+  text-align: right;
 }
 
 .refresh-dot {
@@ -310,8 +330,14 @@ h1 {
     width: calc(100% - 24px);
     padding-top: 28px;
   }
-  .refresh {
+  .header-stats {
+    width: 100%;
+    justify-content: flex-end;
     margin-top: 5px;
+  }
+  .topbar {
+    flex-wrap: wrap;
+    gap: 16px;
   }
   .client-row {
     grid-template-columns: 1fr;

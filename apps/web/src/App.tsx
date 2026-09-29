@@ -1,4 +1,4 @@
-import type { ClientStatus } from '@awg-monitor/shared';
+import type { ClientStatus, ContainerStats } from '@awg-monitor/shared';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { formatBytes, formatHandshakeAge, sortClients } from './format';
@@ -60,6 +60,26 @@ async function fetchClients(signal?: AbortSignal): Promise<ClientStatus[]> {
   return body;
 }
 
+async function fetchContainerStats(signal?: AbortSignal): Promise<ContainerStats> {
+  const response = await fetch('/api/stats', {
+    ...(signal ? { signal } : {}),
+    headers: { Accept: 'application/json' }
+  });
+  if (!response.ok) throw new Error('Unable to load container stats');
+
+  const body: unknown = await response.json();
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    !('cpuPercent' in body) ||
+    typeof body.cpuPercent !== 'number' ||
+    !Number.isFinite(body.cpuPercent)
+  ) {
+    throw new Error('Invalid container stats response');
+  }
+  return { cpuPercent: body.cpuPercent };
+}
+
 interface ClientRowProps {
   client: ClientStatus;
 }
@@ -108,6 +128,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cpuPercent, setCpuPercent] = useState<number | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setRefreshing(true);
@@ -124,15 +145,29 @@ export function App() {
     }
   }, []);
 
+  const loadStats = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const stats = await fetchContainerStats(signal);
+      setCpuPercent(stats.cpuPercent);
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      setCpuPercent(null);
+    }
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     void load(controller.signal);
-    const interval = window.setInterval(() => void load(), REFRESH_INTERVAL_MS);
+    void loadStats(controller.signal);
+    const interval = window.setInterval(() => {
+      void load();
+      void loadStats();
+    }, REFRESH_INTERVAL_MS);
     return () => {
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [load]);
+  }, [load, loadStats]);
 
   const sortedClients = useMemo(() => sortClients(clients), [clients]);
   const onlineClients = clients.filter((client) => client.online).length;
@@ -147,9 +182,15 @@ export function App() {
             <strong>{onlineClients}</strong> online <span>/</span> {clients.length} clients
           </p>
         </div>
-        <div className={`refresh ${refreshing ? 'active' : ''}`} aria-live="polite">
-          <span className="refresh-dot" />
-          {refreshing ? 'Refreshing' : 'Live'}
+        <div className="header-stats">
+          <div className="cpu-load" aria-label="AmneziaWG container CPU load">
+            <span>CPU</span>
+            <strong>{cpuPercent === null ? '—' : `${cpuPercent.toFixed(1)}%`}</strong>
+          </div>
+          <div className={`refresh ${refreshing ? 'active' : ''}`} aria-live="polite">
+            <span className="refresh-dot" />
+            {refreshing ? 'Refreshing' : 'Live'}
+          </div>
         </div>
       </header>
 

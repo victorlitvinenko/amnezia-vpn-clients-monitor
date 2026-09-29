@@ -7,7 +7,7 @@ Russian documentation: [README_ru.md](README_ru.md).
 ## Architecture
 
 ```text
-Browser → React → GET /api/clients → Fastify → dockerode
+Browser → React → GET /api/clients and /api/stats → Fastify → dockerode
                                                ↓
                                       /var/run/docker.sock
                                                ↓
@@ -96,8 +96,9 @@ See `.env.example` for an example configuration. Do not expose these values thro
 
 - `GET /api/health` checks the HTTP application;
 - `GET /api/clients` returns the current merged client snapshot.
+- `GET /api/stats` returns the current CPU load of the AmneziaWG container.
 
-If the socket, container, command, or source data is unavailable, `/api/clients` responds with status `503` and safe JSON without a stack trace. `/api/health` checks only whether the dashboard itself is ready and does not contact AmneziaWG.
+The dashboard refreshes both client data and CPU load every 10 seconds. If the socket, container, command, or source data is unavailable, `/api/clients` and `/api/stats` respond with status `503` and safe JSON without a stack trace. `/api/health` checks only whether the dashboard itself is ready and does not contact AmneziaWG.
 
 ## Docker socket security
 

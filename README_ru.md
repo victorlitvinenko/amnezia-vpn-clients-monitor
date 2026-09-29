@@ -5,7 +5,7 @@
 ## Архитектура
 
 ```text
-Browser → React → GET /api/clients → Fastify → dockerode
+Browser → React → GET /api/clients и /api/stats → Fastify → dockerode
                                                ↓
                                       /var/run/docker.sock
                                                ↓
@@ -94,8 +94,9 @@ docker compose down
 
 - `GET /api/health` — проверка HTTP-приложения;
 - `GET /api/clients` — текущий объединённый snapshot клиентов.
+- `GET /api/stats` — текущая нагрузка на процессор контейнера AmneziaWG.
 
-При недоступности socket, контейнера, команды или повреждённых данных `/api/clients` отвечает `503` и безопасным JSON без stack trace. `/api/health` проверяет только готовность самого dashboard и не обращается к AmneziaWG.
+Панель обновляет данные клиентов и нагрузку на процессор каждые 10 секунд. При недоступности socket, контейнера, команды или повреждённых данных `/api/clients` и `/api/stats` отвечают `503` и безопасным JSON без stack trace. `/api/health` проверяет только готовность самого dashboard и не обращается к AmneziaWG.
 
 ## Безопасность Docker socket
 
