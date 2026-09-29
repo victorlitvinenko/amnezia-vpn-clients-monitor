@@ -15,6 +15,46 @@ function collect(stream: PassThrough): Promise<string> {
   });
 }
 
+export async function demultiplexDockerStream(
+  multiplexed: NodeJS.ReadableStream
+): Promise<{ stdout: string; stderr: string }> {
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const stdoutResult = collect(stdout);
+  const stderrResult = collect(stderr);
+
+  const sourceFinished = new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+
+    multiplexed.once('end', finish);
+    multiplexed.once('close', finish);
+    multiplexed.once('error', fail);
+  });
+
+  docker.modem.demuxStream(multiplexed, stdout, stderr);
+
+  try {
+    await sourceFinished;
+  } finally {
+    // dockerode demuxes chunks but does not end the destination streams.
+    stdout.end();
+    stderr.end();
+  }
+
+  const [stdoutText, stderrText] = await Promise.all([stdoutResult, stderrResult]);
+  return { stdout: stdoutText, stderr: stderrText };
+}
+
 export async function execInAmneziaContainer(
   containerName: string,
   cmd: readonly string[]
@@ -27,13 +67,7 @@ export async function execInAmneziaContainer(
     Tty: false
   });
   const multiplexed = await execution.start({ hijack: true, stdin: false });
-  const stdout = new PassThrough();
-  const stderr = new PassThrough();
-  const stdoutResult = collect(stdout);
-  const stderrResult = collect(stderr);
-
-  docker.modem.demuxStream(multiplexed, stdout, stderr);
-  const [output, errorOutput] = await Promise.all([stdoutResult, stderrResult]);
+  const { stdout: output, stderr: errorOutput } = await demultiplexDockerStream(multiplexed);
   const details = await execution.inspect();
 
   if (details.ExitCode !== 0) {
