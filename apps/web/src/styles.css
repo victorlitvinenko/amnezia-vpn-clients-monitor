@@ -212,7 +212,7 @@ h1 {
   min-width: 0;
   overflow: hidden;
   font-size: 15px;
-  font-weight: 620;
+  font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
