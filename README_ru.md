@@ -6,6 +6,7 @@
 
 ```text
 Browser → React → GET /api/clients и /api/stats → Fastify → dockerode
+                                               ↘ SQLite-счётчики трафика
                                                ↓
                                       /var/run/docker.sock
                                                ↓
@@ -20,6 +21,8 @@ cat /opt/amnezia/awg/clientsTable
 ```
 
 Команды, имя контейнера и имя интерфейса не принимаются из HTTP-запросов. Runtime-данные связываются с метаданными строго по `clientId === publicKey`. Статистика трафика показывается с точки зрения VPN-клиента: AWG `txBytes` — download, AWG `rxBytes` — upload.
+
+Backend в фоне опрашивает счётчики AWG. При первом успешном опросе текущие счётчики становятся начальным значением за месяц, а дневной учёт начинается с нуля. Последующие приращения используются для дневного и месячного download каждого клиента, общего дневного трафика и текущей скорости download/upload. Границы дня и календарного месяца определяются через `TZ`.
 
 ## Требования
 
@@ -36,6 +39,8 @@ npm run dev
 ```
 
 Vite запускается на `http://localhost:5173` и проксирует `/api` в Fastify на `http://localhost:8080`. Локальный процесс API должен иметь доступ к `/var/run/docker.sock`.
+
+При локальном запуске статистика хранится в `./data/traffic.sqlite`; этот каталог игнорируется Git.
 
 Доступные проверки:
 
@@ -70,6 +75,8 @@ docker compose logs -f
 
 По умолчанию Compose публикует приложение на `http://localhost:8080`. Внешний порт можно изменить через `HOST_PORT`, например `HOST_PORT=8081 docker compose up -d --build`. `PORT` задаёт порт, который Fastify слушает внутри контейнера, а `HOST_PORT` — соответствующий порт на хосте. По умолчанию обе переменные равны `8080`. Контейнер `amnezia-awg2` не входит в этот compose-проект и продолжает управляться отдельно.
 
+Счётчики трафика хранятся в именованном volume `traffic-data` и сохраняются при пересборке контейнера и обычном `docker compose down`. Команда `docker compose down -v` удалит накопленную статистику.
+
 Для остановки:
 
 ```bash
@@ -78,23 +85,26 @@ docker compose down
 
 ## Переменные окружения
 
-| Переменная                 |   По умолчанию | Назначение                                   |
-| -------------------------- | -------------: | -------------------------------------------- |
-| `PORT`                     |         `8080` | Внутренний HTTP-порт Fastify                 |
-| `HOST_PORT`                |         `8080` | Порт Docker-host, публикуемый Compose        |
-| `AMNEZIA_CONTAINER`        | `amnezia-awg2` | Имя существующего контейнера                 |
-| `AMNEZIA_INTERFACE`        |         `awg0` | Имя AWG-интерфейса                           |
-| `ONLINE_THRESHOLD_SECONDS` |          `180` | Максимальный возраст handshake для online    |
-| `CACHE_TTL_MS`             |         `3000` | Время жизни snapshot в памяти                |
-| `NODE_ENV`                 |  `development` | В `production` включает раздачу React-сборки |
+| Переменная                   |            По умолчанию | Назначение                                   |
+| ---------------------------- | ----------------------: | -------------------------------------------- |
+| `PORT`                       |                  `8080` | Внутренний HTTP-порт Fastify                 |
+| `HOST_PORT`                  |                  `8080` | Порт Docker-host, публикуемый Compose        |
+| `AMNEZIA_CONTAINER`          |          `amnezia-awg2` | Имя существующего контейнера                 |
+| `AMNEZIA_INTERFACE`          |                  `awg0` | Имя AWG-интерфейса                           |
+| `ONLINE_THRESHOLD_SECONDS`   |                   `180` | Максимальный возраст handshake для online    |
+| `CACHE_TTL_MS`               |                  `3000` | Время жизни snapshot в памяти                |
+| `TRAFFIC_SAMPLE_INTERVAL_MS` |                  `5000` | Интервал фонового опроса трафика             |
+| `TRAFFIC_DB_PATH`            | `./data/traffic.sqlite` | Путь к SQLite-файлу статистики               |
+| `TZ`                         |         `Europe/Moscow` | Часовой пояс для границ дня и месяца         |
+| `NODE_ENV`                   |           `development` | В `production` включает раздачу React-сборки |
 
 Пример находится в `.env.example`. Не передавайте эти значения через публичные HTTP-параметры.
 
 ## API
 
 - `GET /api/health` — проверка HTTP-приложения;
-- `GET /api/clients` — текущий объединённый snapshot клиентов.
-- `GET /api/stats` — текущая нагрузка на процессор контейнера AmneziaWG.
+- `GET /api/clients` — текущий объединённый snapshot клиентов с дневным и месячным download.
+- `GET /api/stats` — нагрузка на процессор, текущие скорости download/upload и общий трафик за день.
 
 Панель обновляет данные клиентов и нагрузку на процессор каждые 5 секунд. При недоступности socket, контейнера, команды или повреждённых данных `/api/clients` и `/api/stats` отвечают `503` и безопасным JSON без stack trace. `/api/health` проверяет только готовность самого dashboard и не обращается к AmneziaWG.
 
@@ -106,7 +116,7 @@ Docker socket фактически предоставляет высокие п�
 - HTTP API принимает только `GET` и не принимает Docker-команды;
 - backend содержит только два фиксированных вызова Docker Exec;
 - отсутствуют `child_process`, Docker CLI, `eval` и операции start/stop/remove/create;
-- файловая система dashboard-контейнера работает в режиме read-only;
+- файловая система dashboard-контейнера работает в режиме read-only, кроме отдельного volume `/app/data` для статистики;
 - ответы и обычные логи не содержат endpoint-список клиентов.
 
 Размещайте dashboard только в доверенной среде и ограничьте внешний доступ средствами Dokploy/Traefik. В v1 встроенной авторизации нет.

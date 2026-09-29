@@ -1,7 +1,7 @@
 import type { ClientStatus, ContainerStats } from '@awg-monitor/shared';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { formatBytes, formatHandshakeAge, sortClients } from './format';
+import { formatBitRate, formatHandshakeAge, formatTrafficBytes, sortClients } from './format';
 
 const REFRESH_INTERVAL_MS = 5_000;
 
@@ -30,10 +30,10 @@ function isClientStatus(value: unknown): value is ClientStatus {
     isNullableNumber(value.handshakeAgeSeconds) &&
     'endpoint' in value &&
     isNullableString(value.endpoint) &&
-    'downloadBytes' in value &&
-    typeof value.downloadBytes === 'number' &&
-    'uploadBytes' in value &&
-    typeof value.uploadBytes === 'number' &&
+    'downloadTodayBytes' in value &&
+    typeof value.downloadTodayBytes === 'number' &&
+    'downloadMonthBytes' in value &&
+    typeof value.downloadMonthBytes === 'number' &&
     'createdAt' in value &&
     isNullableString(value.createdAt)
   );
@@ -73,11 +73,23 @@ async function fetchContainerStats(signal?: AbortSignal): Promise<ContainerStats
     body === null ||
     !('cpuPercent' in body) ||
     typeof body.cpuPercent !== 'number' ||
-    !Number.isFinite(body.cpuPercent)
+    !Number.isFinite(body.cpuPercent) ||
+    !('downloadBitsPerSecond' in body) ||
+    !isNullableNumber(body.downloadBitsPerSecond) ||
+    !('uploadBitsPerSecond' in body) ||
+    !isNullableNumber(body.uploadBitsPerSecond) ||
+    !('totalTodayBytes' in body) ||
+    typeof body.totalTodayBytes !== 'number' ||
+    !Number.isFinite(body.totalTodayBytes)
   ) {
     throw new Error('Invalid container stats response');
   }
-  return { cpuPercent: body.cpuPercent };
+  return {
+    cpuPercent: body.cpuPercent,
+    downloadBitsPerSecond: body.downloadBitsPerSecond,
+    uploadBitsPerSecond: body.uploadBitsPerSecond,
+    totalTodayBytes: body.totalTodayBytes
+  };
 }
 
 interface ClientRowProps {
@@ -94,13 +106,13 @@ function ClientRow({ client }: ClientRowProps) {
         />
         <strong>{client.name}</strong>
       </div>
-      <div className="traffic" aria-label="Traffic">
-        <span className="download">
-          <b>↓</b> {formatBytes(client.downloadBytes)}
-        </span>
-        <span className="upload">
-          <b>↑</b> {formatBytes(client.uploadBytes)}
-        </span>
+      <div className="period-traffic" aria-label="Download today">
+        <span className="mobile-label">↓ Today</span>
+        <strong>{formatTrafficBytes(client.downloadTodayBytes)}</strong>
+      </div>
+      <div className="period-traffic" aria-label="Download this month">
+        <span className="mobile-label">↓ Month</span>
+        <strong>{formatTrafficBytes(client.downloadMonthBytes)}</strong>
       </div>
       <div className="connection">
         <span>{formatHandshakeAge(client.handshakeAgeSeconds)}</span>
@@ -125,6 +137,9 @@ export function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cpuPercent, setCpuPercent] = useState<number | null>(null);
+  const [downloadBitsPerSecond, setDownloadBitsPerSecond] = useState<number | null>(null);
+  const [uploadBitsPerSecond, setUploadBitsPerSecond] = useState<number | null>(null);
+  const [totalTodayBytes, setTotalTodayBytes] = useState<number | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setRefreshing(true);
@@ -145,9 +160,14 @@ export function App() {
     try {
       const stats = await fetchContainerStats(signal);
       setCpuPercent(stats.cpuPercent);
+      setDownloadBitsPerSecond(stats.downloadBitsPerSecond);
+      setUploadBitsPerSecond(stats.uploadBitsPerSecond);
+      setTotalTodayBytes(stats.totalTodayBytes);
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return;
       setCpuPercent(null);
+      setDownloadBitsPerSecond(null);
+      setUploadBitsPerSecond(null);
     }
   }, []);
 
@@ -179,16 +199,30 @@ export function App() {
           </p>
         </div>
         <div className="header-stats">
-          <div className="cpu-load" aria-label="AmneziaWG container CPU load">
-            <span>CPU</span>
-            <strong>{cpuPercent === null ? '—' : `${cpuPercent.toFixed(1)}%`}</strong>
+          <div className="status-line">
+            <div className="cpu-load" aria-label="AmneziaWG container CPU load">
+              <span>CPU</span>
+              <strong>{cpuPercent === null ? '—' : `${cpuPercent.toFixed(1)}%`}</strong>
+            </div>
+            <div
+              className={`refresh ${refreshing ? 'active' : ''}`}
+              aria-label={refreshing ? 'Refreshing' : 'Live'}
+            >
+              <span className="refresh-dot" aria-hidden="true" />
+              <span aria-hidden="true">Live</span>
+            </div>
           </div>
-          <div
-            className={`refresh ${refreshing ? 'active' : ''}`}
-            aria-label={refreshing ? 'Refreshing' : 'Live'}
-          >
-            <span className="refresh-dot" aria-hidden="true" />
-            <span aria-hidden="true">Live</span>
+          <div className="throughput" aria-label="Current VPN traffic speed">
+            <span className="download">
+              <b>↓</b> {formatBitRate(downloadBitsPerSecond)}
+            </span>
+            <span className="upload">
+              <b>↑</b> {formatBitRate(uploadBitsPerSecond)}
+            </span>
+          </div>
+          <div className="total-today">
+            Total today:{' '}
+            <strong>{totalTodayBytes === null ? '—' : formatTrafficBytes(totalTodayBytes)}</strong>
           </div>
         </div>
       </header>
@@ -205,7 +239,8 @@ export function App() {
       <section className="clients" aria-label="AmneziaWG clients">
         <div className="table-header" aria-hidden="true">
           <span>Client</span>
-          <span>Traffic</span>
+          <span>↓ Today</span>
+          <span>↓ Month</span>
           <span>Connection</span>
         </div>
         {loading ? (

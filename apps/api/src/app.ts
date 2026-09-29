@@ -6,22 +6,38 @@ import fastify, { type FastifyInstance } from 'fastify';
 
 import type { AppConfig } from './config.js';
 import { getContainerCpuPercent } from './docker.js';
-import { createClientStatusService } from './service.js';
+import { createMonitoringService, type TrafficStats } from './service.js';
 
 interface BuildAppOptions {
   config: AppConfig;
   getClients?: () => Promise<ClientStatus[]>;
   getCpuPercent?: () => Promise<number>;
+  getTrafficStats?: () => TrafficStats;
 }
 
 export async function buildApp({
   config,
   getClients,
-  getCpuPercent
+  getCpuPercent,
+  getTrafficStats
 }: BuildAppOptions): Promise<FastifyInstance> {
   const app = fastify({ logger: true });
-  const loadClients = getClients ?? createClientStatusService(config);
+  const monitor = getClients ? undefined : createMonitoringService(config);
+  const loadClients = getClients ?? (() => monitor!.getClients());
   const loadCpuPercent = getCpuPercent ?? (() => getContainerCpuPercent(config.containerName));
+  const loadTrafficStats =
+    getTrafficStats ??
+    (() =>
+      monitor?.getTrafficStats() ?? {
+        downloadBitsPerSecond: null,
+        uploadBitsPerSecond: null,
+        totalTodayBytes: 0
+      });
+
+  if (monitor) {
+    monitor.start(app.log);
+    app.addHook('onClose', async () => monitor.close());
+  }
 
   app.get<{ Reply: HealthResponse }>('/api/health', async () => ({ status: 'ok' }));
   app.get('/api/clients', async (_request, reply) => {
@@ -34,7 +50,9 @@ export async function buildApp({
   });
   app.get<{ Reply: ContainerStats | ApiError }>('/api/stats', async (_request, reply) => {
     try {
-      return { cpuPercent: await loadCpuPercent() };
+      const traffic = loadTrafficStats();
+      const cpuPercent = await loadCpuPercent();
+      return { cpuPercent, ...traffic };
     } catch (error) {
       app.log.error({ err: error }, 'Unable to read AmneziaWG container stats');
       return reply.code(503).send({ error: 'Unable to read AmneziaWG container stats' });

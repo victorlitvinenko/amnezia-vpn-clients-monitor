@@ -8,6 +8,7 @@ Russian documentation: [README_ru.md](README_ru.md).
 
 ```text
 Browser → React → GET /api/clients and /api/stats → Fastify → dockerode
+                                               ↘ SQLite traffic counters
                                                ↓
                                       /var/run/docker.sock
                                                ↓
@@ -22,6 +23,8 @@ cat /opt/amnezia/awg/clientsTable
 ```
 
 Commands, the container name, and the interface name cannot be supplied through HTTP requests. Runtime data is matched with metadata strictly by `clientId === publicKey`. Traffic statistics are shown from the VPN client's perspective: AWG `txBytes` is download traffic and AWG `rxBytes` is upload traffic.
+
+The backend samples AWG counters in the background. Current counters are used as the initial monthly baseline, while daily accounting starts at zero on the first successful sample. Later counter deltas provide per-client daily and monthly download totals, aggregate daily traffic, and current download/upload rates. The accounting day and calendar month follow `TZ`.
 
 ## Requirements
 
@@ -38,6 +41,8 @@ npm run dev
 ```
 
 Vite starts at `http://localhost:5173` and proxies `/api` to Fastify at `http://localhost:8080`. The local API process must have access to `/var/run/docker.sock`.
+
+Local traffic state is stored in `./data/traffic.sqlite`, which is ignored by Git.
 
 Available checks:
 
@@ -72,6 +77,8 @@ docker compose logs -f
 
 By default, Compose publishes the application at `http://localhost:8080`. You can change the host port through `HOST_PORT`, for example: `HOST_PORT=8081 docker compose up -d --build`. `PORT` controls the port that Fastify listens on inside the container, while `HOST_PORT` controls the host-side mapping. Both default to `8080`. The `amnezia-awg2` container is not part of this Compose project and remains managed separately.
 
+Traffic counters are stored in the `traffic-data` named volume and survive normal container rebuilds and `docker compose down`. Running `docker compose down -v` deletes the accumulated statistics.
+
 To stop the application:
 
 ```bash
@@ -80,23 +87,26 @@ docker compose down
 
 ## Environment variables
 
-| Variable                   |        Default | Purpose                                                                 |
-| -------------------------- | -------------: | ----------------------------------------------------------------------- |
-| `PORT`                     |         `8080` | Internal Fastify HTTP port                                              |
-| `HOST_PORT`                |         `8080` | Docker host port published by Compose                                   |
-| `AMNEZIA_CONTAINER`        | `amnezia-awg2` | Name of the existing container                                          |
-| `AMNEZIA_INTERFACE`        |         `awg0` | AWG interface name                                                      |
-| `ONLINE_THRESHOLD_SECONDS` |          `180` | Maximum handshake age for an online client                              |
-| `CACHE_TTL_MS`             |         `3000` | In-memory snapshot lifetime                                             |
-| `NODE_ENV`                 |  `development` | Enables serving the compiled React application when set to `production` |
+| Variable                     |                 Default | Purpose                                                                 |
+| ---------------------------- | ----------------------: | ----------------------------------------------------------------------- |
+| `PORT`                       |                  `8080` | Internal Fastify HTTP port                                              |
+| `HOST_PORT`                  |                  `8080` | Docker host port published by Compose                                   |
+| `AMNEZIA_CONTAINER`          |          `amnezia-awg2` | Name of the existing container                                          |
+| `AMNEZIA_INTERFACE`          |                  `awg0` | AWG interface name                                                      |
+| `ONLINE_THRESHOLD_SECONDS`   |                   `180` | Maximum handshake age for an online client                              |
+| `CACHE_TTL_MS`               |                  `3000` | In-memory snapshot lifetime                                             |
+| `TRAFFIC_SAMPLE_INTERVAL_MS` |                  `5000` | Background traffic sampling interval                                    |
+| `TRAFFIC_DB_PATH`            | `./data/traffic.sqlite` | SQLite traffic database path                                            |
+| `TZ`                         |         `Europe/Moscow` | Time zone for daily and monthly boundaries                              |
+| `NODE_ENV`                   |           `development` | Enables serving the compiled React application when set to `production` |
 
 See `.env.example` for an example configuration. Do not expose these values through public HTTP parameters.
 
 ## API
 
 - `GET /api/health` checks the HTTP application;
-- `GET /api/clients` returns the current merged client snapshot.
-- `GET /api/stats` returns the current CPU load of the AmneziaWG container.
+- `GET /api/clients` returns the current merged client snapshot with daily and monthly download totals.
+- `GET /api/stats` returns CPU load, current download/upload rates, and aggregate traffic for the current day.
 
 The dashboard refreshes both client data and CPU load every 5 seconds. If the socket, container, command, or source data is unavailable, `/api/clients` and `/api/stats` respond with status `503` and safe JSON without a stack trace. `/api/health` checks only whether the dashboard itself is ready and does not contact AmneziaWG.
 
@@ -108,7 +118,7 @@ The Docker socket effectively provides elevated access to the host. The `:ro` su
 - the HTTP API accepts only `GET` requests and does not accept Docker commands;
 - the backend contains only two fixed Docker Exec calls;
 - there is no `child_process`, Docker CLI, `eval`, or start/stop/remove/create operation;
-- the dashboard container uses a read-only filesystem;
+- the dashboard container uses a read-only filesystem except for the dedicated `/app/data` statistics volume;
 - responses and ordinary logs do not include the client endpoint list.
 
 Run the dashboard only in a trusted environment and restrict external access through Dokploy/Traefik. Version 1 does not include built-in authentication.

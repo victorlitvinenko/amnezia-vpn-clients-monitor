@@ -1,11 +1,24 @@
 import type { ClientStatus } from '@awg-monitor/shared';
 
-export function formatBytes(bytes: number): string {
+export function formatTrafficBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
-  const power = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value = bytes / 1024 ** power;
+  const units = ['B', 'kB', 'MB', 'GB', 'TB'];
+  const power = Math.min(Math.floor(Math.log(bytes) / Math.log(1000)), units.length - 1);
+  const value = bytes / 1000 ** power;
   const digits = power === 0 ? 0 : value >= 100 ? 0 : value >= 10 ? 1 : 2;
+  return `${Number(value.toFixed(digits))} ${units[power]}`;
+}
+
+export function formatBitRate(bitsPerSecond: number | null): string {
+  if (bitsPerSecond === null || !Number.isFinite(bitsPerSecond) || bitsPerSecond < 0) return '—';
+  if (bitsPerSecond < 1000) return `${Math.round(bitsPerSecond)} bit/s`;
+  const units = ['kbit/s', 'Mbit/s', 'Gbit/s', 'Tbit/s'];
+  const power = Math.min(
+    Math.floor(Math.log(bitsPerSecond) / Math.log(1000)) - 1,
+    units.length - 1
+  );
+  const value = bitsPerSecond / 1000 ** (power + 1);
+  const digits = value >= 100 ? 0 : value >= 10 ? 1 : 2;
   return `${Number(value.toFixed(digits))} ${units[power]}`;
 }
 

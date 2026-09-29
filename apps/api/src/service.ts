@@ -1,24 +1,154 @@
 import type { ClientStatus } from '@awg-monitor/shared';
 
-import { TimedCache } from './cache.js';
 import type { AppConfig } from './config.js';
 import { getAwgDump, getClientsTable } from './docker.js';
-import { mergeClients, parseAwgDump, parseClientsTable } from './domain.js';
+import {
+  mergeClients,
+  parseAwgDump,
+  parseClientsTable,
+  type AwgPeer,
+  type ClientMetadata
+} from './domain.js';
+import { TrafficStore } from './traffic-store.js';
 
-export function createClientStatusService(config: AppConfig): () => Promise<ClientStatus[]> {
-  const cache = new TimedCache<ClientStatus[]>(config.cacheTtlMs);
+export interface TrafficStats {
+  downloadBitsPerSecond: number | null;
+  uploadBitsPerSecond: number | null;
+  totalTodayBytes: number;
+}
 
-  return () =>
-    cache.get(async () => {
-      const [dump, table] = await Promise.all([
-        getAwgDump(config.containerName, config.interfaceName),
-        getClientsTable(config.containerName)
-      ]);
-      return mergeClients(
-        parseAwgDump(dump),
-        parseClientsTable(table),
-        Math.floor(Date.now() / 1000),
-        config.onlineThresholdSeconds
-      );
+interface RuntimeSnapshot {
+  peers: AwgPeer[];
+  sampledAtMs: number;
+}
+
+interface MonitoringDependencies {
+  loadSources?: () => Promise<{ peers: AwgPeer[]; clients: ClientMetadata[] }>;
+  now?: () => number;
+  store?: TrafficStore;
+}
+
+interface MonitorLogger {
+  error: (error: unknown, message: string) => void;
+}
+
+export class MonitoringService {
+  private readonly loadSources: () => Promise<{ peers: AwgPeer[]; clients: ClientMetadata[] }>;
+  private readonly now: () => number;
+  private readonly store: TrafficStore;
+  private clients: ClientStatus[] | undefined;
+  private runtimeSnapshot: RuntimeSnapshot | undefined;
+  private pending: Promise<void> | undefined;
+  private interval: NodeJS.Timeout | undefined;
+  private stats: TrafficStats;
+
+  constructor(
+    private readonly config: AppConfig,
+    dependencies: MonitoringDependencies = {}
+  ) {
+    this.loadSources =
+      dependencies.loadSources ??
+      (async () => {
+        const [dump, table] = await Promise.all([
+          getAwgDump(config.containerName, config.interfaceName),
+          getClientsTable(config.containerName)
+        ]);
+        return { peers: parseAwgDump(dump), clients: parseClientsTable(table) };
+      });
+    this.now = dependencies.now ?? Date.now;
+    this.store = dependencies.store ?? new TrafficStore(config.trafficDbPath, config.timeZone);
+    this.stats = {
+      downloadBitsPerSecond: null,
+      uploadBitsPerSecond: null,
+      totalTodayBytes: this.store.readTotalToday(this.now())
+    };
+  }
+
+  start(logger: MonitorLogger): void {
+    void this.refresh().catch((error: unknown) => {
+      logger.error(error, 'Unable to collect AmneziaWG traffic sample');
     });
+    this.interval = setInterval(() => {
+      void this.refresh().catch((error: unknown) => {
+        logger.error(error, 'Unable to collect AmneziaWG traffic sample');
+      });
+    }, this.config.trafficSampleIntervalMs);
+  }
+
+  async getClients(): Promise<ClientStatus[]> {
+    const sampledAtMs = this.runtimeSnapshot?.sampledAtMs ?? 0;
+    if (!this.clients || this.now() - sampledAtMs >= this.config.cacheTtlMs) {
+      await this.refresh();
+    }
+    if (!this.clients) throw new Error('No AmneziaWG snapshot is available');
+    return this.clients;
+  }
+
+  getTrafficStats(): TrafficStats {
+    const sampledAtMs = this.runtimeSnapshot?.sampledAtMs ?? 0;
+    const ratesAreFresh = this.now() - sampledAtMs <= this.config.trafficSampleIntervalMs * 2;
+    return {
+      downloadBitsPerSecond: ratesAreFresh ? this.stats.downloadBitsPerSecond : null,
+      uploadBitsPerSecond: ratesAreFresh ? this.stats.uploadBitsPerSecond : null,
+      totalTodayBytes: this.store.readTotalToday(this.now())
+    };
+  }
+
+  refresh(): Promise<void> {
+    if (this.pending) return this.pending;
+    this.pending = this.collect().finally(() => {
+      this.pending = undefined;
+    });
+    return this.pending;
+  }
+
+  async close(): Promise<void> {
+    if (this.interval) clearInterval(this.interval);
+    this.interval = undefined;
+    try {
+      await this.pending;
+    } finally {
+      this.store.close();
+    }
+  }
+
+  private async collect(): Promise<void> {
+    const { peers, clients } = await this.loadSources();
+    const sampledAtMs = this.now();
+    const stored = this.store.applySnapshot(peers, sampledAtMs);
+    const previous = this.runtimeSnapshot;
+    const elapsedSeconds = previous ? (sampledAtMs - previous.sampledAtMs) / 1000 : 0;
+    let downloadDelta = 0;
+    let uploadDelta = 0;
+
+    if (previous && elapsedSeconds > 0) {
+      const previousByKey = new Map(previous.peers.map((peer) => [peer.publicKey, peer]));
+      for (const peer of peers) {
+        const oldPeer = previousByKey.get(peer.publicKey);
+        if (!oldPeer) continue;
+        if (peer.txBytes >= oldPeer.txBytes) downloadDelta += peer.txBytes - oldPeer.txBytes;
+        if (peer.rxBytes >= oldPeer.rxBytes) uploadDelta += peer.rxBytes - oldPeer.rxBytes;
+      }
+    }
+
+    this.clients = mergeClients(
+      peers,
+      clients,
+      Math.floor(sampledAtMs / 1000),
+      this.config.onlineThresholdSeconds,
+      stored.trafficByClient
+    );
+    this.runtimeSnapshot = { peers, sampledAtMs };
+    this.stats = {
+      downloadBitsPerSecond:
+        previous && elapsedSeconds > 0 ? (downloadDelta * 8) / elapsedSeconds : null,
+      uploadBitsPerSecond:
+        previous && elapsedSeconds > 0 ? (uploadDelta * 8) / elapsedSeconds : null,
+      totalTodayBytes: stored.totalTodayBytes
+    };
+  }
+}
+
+export function createMonitoringService(config: AppConfig): MonitoringService {
+  return new MonitoringService(config);
 }

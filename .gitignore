@@ -6,3 +6,4 @@ coverage/
 *.tsbuildinfo
 .playwright-cli/
 .DS_Store
+data/

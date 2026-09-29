@@ -10,6 +10,9 @@ const config: AppConfig = {
   interfaceName: 'awg0',
   onlineThresholdSeconds: 180,
   cacheTtlMs: 3000,
+  trafficSampleIntervalMs: 5000,
+  trafficDbPath: ':memory:',
+  timeZone: 'Europe/Moscow',
   nodeEnv: 'test'
 };
 
@@ -28,11 +31,21 @@ describe('API', () => {
     app = await buildApp({
       config,
       getClients: async () => [],
-      getCpuPercent: async () => 12.5
+      getCpuPercent: async () => 12.5,
+      getTrafficStats: () => ({
+        downloadBitsPerSecond: 24_200_000,
+        uploadBitsPerSecond: 3_800_000,
+        totalTodayBytes: 18_700_000_000
+      })
     });
     const response = await app.inject({ method: 'GET', url: '/api/stats' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ cpuPercent: 12.5 });
+    expect(response.json()).toEqual({
+      cpuPercent: 12.5,
+      downloadBitsPerSecond: 24_200_000,
+      uploadBitsPerSecond: 3_800_000,
+      totalTodayBytes: 18_700_000_000
+    });
   });
 
   it('returns a safe JSON error when container stats are unavailable', async () => {

@@ -6,8 +6,8 @@ export interface ClientStatus {
   latestHandshake: number | null;
   handshakeAgeSeconds: number | null;
   endpoint: string | null;
-  downloadBytes: number;
-  uploadBytes: number;
+  downloadTodayBytes: number;
+  downloadMonthBytes: number;
   createdAt: string | null;
 }
 
@@ -21,4 +21,7 @@ export interface HealthResponse {
 
 export interface ContainerStats {
   cpuPercent: number;
+  downloadBitsPerSecond: number | null;
+  uploadBitsPerSecond: number | null;
+  totalTodayBytes: number;
 }

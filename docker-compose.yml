@@ -9,10 +9,14 @@ services:
       AMNEZIA_INTERFACE: ${AMNEZIA_INTERFACE:-awg0}
       ONLINE_THRESHOLD_SECONDS: ${ONLINE_THRESHOLD_SECONDS:-180}
       CACHE_TTL_MS: ${CACHE_TTL_MS:-3000}
+      TRAFFIC_SAMPLE_INTERVAL_MS: ${TRAFFIC_SAMPLE_INTERVAL_MS:-5000}
+      TRAFFIC_DB_PATH: /app/data/traffic.sqlite
+      TZ: ${TZ:-Europe/Moscow}
     ports:
       - '${HOST_PORT:-8080}:${PORT:-8080}'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traffic-data:/app/data
     read_only: true
     tmpfs:
       - /tmp
@@ -30,3 +34,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+volumes:
+  traffic-data:

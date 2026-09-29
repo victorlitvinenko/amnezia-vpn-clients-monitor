@@ -23,6 +23,11 @@ const clientSchema = z.object({
 
 export type ClientMetadata = z.infer<typeof clientSchema>;
 
+export interface ClientTrafficUsage {
+  downloadTodayBytes: number;
+  downloadMonthBytes: number;
+}
+
 function numberField(value: string | undefined): number | null {
   if (value === undefined || value.trim() === '') return null;
   const parsed = Number(value);
@@ -85,6 +90,7 @@ function statusFor(
   id: string,
   client: ClientMetadata | undefined,
   peer: AwgPeer | undefined,
+  traffic: ClientTrafficUsage | undefined,
   nowUnix: number,
   threshold: number
 ): ClientStatus {
@@ -100,8 +106,8 @@ function statusFor(
     latestHandshake: hasHandshake ? handshake : null,
     handshakeAgeSeconds: hasHandshake ? Math.max(0, nowUnix - handshake) : null,
     endpoint: peer?.endpoint ?? null,
-    downloadBytes: peer?.txBytes ?? 0,
-    uploadBytes: peer?.rxBytes ?? 0,
+    downloadTodayBytes: traffic?.downloadTodayBytes ?? 0,
+    downloadMonthBytes: traffic?.downloadMonthBytes ?? 0,
     createdAt: client?.userData?.creationDate ?? null
   };
 }
@@ -110,12 +116,20 @@ export function mergeClients(
   peers: readonly AwgPeer[],
   clients: readonly ClientMetadata[],
   nowUnix: number,
-  threshold: number
+  threshold: number,
+  trafficByClient: ReadonlyMap<string, ClientTrafficUsage> = new Map()
 ): ClientStatus[] {
   const peersByKey = new Map(peers.map((peer) => [peer.publicKey, peer]));
   const clientsByKey = new Map(clients.map((client) => [client.clientId, client]));
   const ids = new Set([...clientsByKey.keys(), ...peersByKey.keys()]);
   return [...ids].map((id) =>
-    statusFor(id, clientsByKey.get(id), peersByKey.get(id), nowUnix, threshold)
+    statusFor(
+      id,
+      clientsByKey.get(id),
+      peersByKey.get(id),
+      trafficByClient.get(id),
+      nowUnix,
+      threshold
+    )
   );
 }

@@ -120,8 +120,14 @@ describe('mergeClients', () => {
     expect(status).toMatchObject({ id: 'pub-a', ip: '10.8.1.2', createdAt: null });
   });
 
-  it('maps server RX to user upload and server TX to user download', () => {
-    const [status] = mergeClients([runtimePeer], [], 1000, 180);
-    expect(status).toMatchObject({ uploadBytes: 128, downloadBytes: 256 });
+  it('adds stored daily and monthly download totals', () => {
+    const [status] = mergeClients(
+      [runtimePeer],
+      [],
+      1000,
+      180,
+      new Map([['pub-a', { downloadTodayBytes: 128, downloadMonthBytes: 256 }]])
+    );
+    expect(status).toMatchObject({ downloadTodayBytes: 128, downloadMonthBytes: 256 });
   });
 });
