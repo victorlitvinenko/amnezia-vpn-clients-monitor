@@ -147,7 +147,7 @@ When changing parsing, merge behavior, status calculation, caching, or traffic d
 - Preserve the dark, compact, responsive design without introducing a UI kit or Tailwind.
 - Desktop uses a table-like layout; narrow screens use client cards.
 - Keep previous data visible during automatic refreshes.
-- Refresh `/api/clients` every 10 seconds.
+- Refresh `/api/clients` and `/api/stats` every 5 seconds.
 - Sort clients deterministically: online first, then newest handshake, never-connected clients last, and name as the final tie-breaker.
 - Display IP addresses and endpoints with a monospace font.
 - Show `Never connected` when no handshake exists.

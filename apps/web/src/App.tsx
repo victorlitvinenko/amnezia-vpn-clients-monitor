@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { formatBytes, formatHandshakeAge, sortClients } from './format';
 
-const REFRESH_INTERVAL_MS = 10_000;
+const REFRESH_INTERVAL_MS = 5_000;
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string';
@@ -92,10 +92,7 @@ function ClientRow({ client }: ClientRowProps) {
           className={`status-dot ${client.online ? 'online' : ''}`}
           aria-label={client.online ? 'Online' : 'Offline'}
         />
-        <div className="identity-text">
-          <strong>{client.name}</strong>
-          <span className="mono secondary">{client.ip ?? 'No address'}</span>
-        </div>
+        <strong>{client.name}</strong>
       </div>
       <div className="traffic" aria-label="Traffic">
         <span className="download">
@@ -107,7 +104,6 @@ function ClientRow({ client }: ClientRowProps) {
       </div>
       <div className="connection">
         <span>{formatHandshakeAge(client.handshakeAgeSeconds)}</span>
-        <span className="mono secondary endpoint">{client.endpoint ?? 'No endpoint'}</span>
       </div>
     </article>
   );
@@ -187,9 +183,12 @@ export function App() {
             <span>CPU</span>
             <strong>{cpuPercent === null ? '—' : `${cpuPercent.toFixed(1)}%`}</strong>
           </div>
-          <div className={`refresh ${refreshing ? 'active' : ''}`} aria-live="polite">
-            <span className="refresh-dot" />
-            {refreshing ? 'Refreshing' : 'Live'}
+          <div
+            className={`refresh ${refreshing ? 'active' : ''}`}
+            aria-label={refreshing ? 'Refreshing' : 'Live'}
+          >
+            <span className="refresh-dot" aria-hidden="true" />
+            <span aria-hidden="true">Live</span>
           </div>
         </div>
       </header>

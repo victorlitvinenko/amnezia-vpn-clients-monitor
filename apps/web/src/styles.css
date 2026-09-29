@@ -169,28 +169,13 @@ h1 {
   box-shadow: 0 0 0 4px rgb(80 216 144 / 9%);
 }
 
-.identity-text,
-.connection {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-width: 0;
-}
-
 .identity strong {
+  min-width: 0;
   overflow: hidden;
   font-size: 15px;
   font-weight: 620;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.secondary {
-  color: #7d8998;
-  font-size: 12px;
-}
-.mono {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 }
 
 .traffic {
@@ -216,12 +201,6 @@ h1 {
   color: #c5ccd6;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
-}
-
-.endpoint {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .error-banner {
@@ -306,11 +285,7 @@ h1 {
   .connection {
     grid-column: 2;
     grid-row: 1 / span 2;
-    align-items: flex-end;
     text-align: right;
-  }
-  .endpoint {
-    max-width: 220px;
   }
   .skeleton-list {
     display: grid;
@@ -350,10 +325,6 @@ h1 {
   .connection {
     grid-column: 1;
     grid-row: 3;
-    align-items: flex-start;
     text-align: left;
-  }
-  .endpoint {
-    max-width: 100%;
   }
 }
