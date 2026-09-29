@@ -14,7 +14,10 @@
     "lint": "oxlint .",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "auth:password": "node -e \"console.log(require('node:crypto').randomBytes(24).toString('base64url'))\"",
+    "auth:hash": "npm run auth:hash -w @awg-monitor/api",
+    "auth:secret": "node -e \"console.log(require('node:crypto').randomBytes(32).toString('hex'))\""
   },
   "devDependencies": {
     "concurrently": "^10.0.5",

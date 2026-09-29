@@ -15,6 +15,14 @@ export interface ApiError {
   error: string;
 }
 
+export interface AuthStatus {
+  authenticated: boolean;
+}
+
+export interface LoginRequest {
+  password: string;
+}
+
 export interface HealthResponse {
   status: 'ok';
 }

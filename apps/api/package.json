@@ -9,11 +9,15 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "auth:hash": "node scripts/hash-password.mjs"
   },
   "dependencies": {
     "@awg-monitor/shared": "1.0.0",
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/rate-limit": "^11.2.0",
     "@fastify/static": "^10.1.5",
+    "argon2": "^0.45.1",
     "dockerode": "^5.0.1",
     "fastify": "^5.12.5",
     "zod": "^4.6.5"

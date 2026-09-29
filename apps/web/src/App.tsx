@@ -1,9 +1,11 @@
-import type { ClientStatus, ContainerStats } from '@awg-monitor/shared';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { AuthStatus, ClientStatus, ContainerStats, LoginRequest } from '@awg-monitor/shared';
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { formatBitRate, formatHandshakeAge, formatTrafficBytes, sortClients } from './format';
 
 const REFRESH_INTERVAL_MS = 5_000;
+
+class AuthenticationRequiredError extends Error {}
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string';
@@ -49,6 +51,7 @@ async function fetchClients(signal?: AbortSignal): Promise<ClientStatus[]> {
     ...(signal ? { signal } : {}),
     headers: { Accept: 'application/json' }
   });
+  if (response.status === 401) throw new AuthenticationRequiredError();
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => null);
     throw new Error(apiErrorMessage(body) ?? 'Unable to load AmneziaWG status');
@@ -65,6 +68,7 @@ async function fetchContainerStats(signal?: AbortSignal): Promise<ContainerStats
     ...(signal ? { signal } : {}),
     headers: { Accept: 'application/json' }
   });
+  if (response.status === 401) throw new AuthenticationRequiredError();
   if (!response.ok) throw new Error('Unable to load container stats');
 
   const body: unknown = await response.json();
@@ -90,6 +94,46 @@ async function fetchContainerStats(signal?: AbortSignal): Promise<ContainerStats
     uploadBitsPerSecond: body.uploadBitsPerSecond,
     totalTodayBytes: body.totalTodayBytes
   };
+}
+
+async function fetchAuthStatus(signal?: AbortSignal): Promise<AuthStatus> {
+  const response = await fetch('/api/auth/session', {
+    ...(signal ? { signal } : {}),
+    headers: { Accept: 'application/json' }
+  });
+  if (!response.ok) throw new Error('Unable to check authentication');
+  const body: unknown = await response.json();
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    !('authenticated' in body) ||
+    typeof body.authenticated !== 'boolean'
+  ) {
+    throw new Error('Invalid authentication response');
+  }
+  return { authenticated: body.authenticated };
+}
+
+async function login(password: string): Promise<void> {
+  const body: LoginRequest = { password };
+  const response = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('Invalid password');
+    if (response.status === 429) throw new Error('Too many attempts. Try again later.');
+    throw new Error('Unable to sign in');
+  }
+}
+
+async function logout(): Promise<void> {
+  const response = await fetch('/api/auth/logout', { method: 'POST' });
+  if (!response.ok && response.status !== 401) throw new Error('Unable to sign out');
 }
 
 interface ClientRowProps {
@@ -131,7 +175,12 @@ function LoadingState() {
   );
 }
 
-export function App() {
+interface DashboardProps {
+  onAuthenticationRequired: () => void;
+  onLogout: () => void;
+}
+
+function Dashboard({ onAuthenticationRequired, onLogout }: DashboardProps) {
   const [clients, setClients] = useState<ClientStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -141,35 +190,49 @@ export function App() {
   const [uploadBitsPerSecond, setUploadBitsPerSecond] = useState<number | null>(null);
   const [totalTodayBytes, setTotalTodayBytes] = useState<number | null>(null);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setRefreshing(true);
-    try {
-      const nextClients = await fetchClients(signal);
-      setClients(nextClients);
-      setError(null);
-    } catch (cause) {
-      if (cause instanceof DOMException && cause.name === 'AbortError') return;
-      setError('Unable to load AmneziaWG status');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      setRefreshing(true);
+      try {
+        const nextClients = await fetchClients(signal);
+        setClients(nextClients);
+        setError(null);
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof AuthenticationRequiredError) {
+          onAuthenticationRequired();
+          return;
+        }
+        setError('Unable to load AmneziaWG status');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [onAuthenticationRequired]
+  );
 
-  const loadStats = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const stats = await fetchContainerStats(signal);
-      setCpuPercent(stats.cpuPercent);
-      setDownloadBitsPerSecond(stats.downloadBitsPerSecond);
-      setUploadBitsPerSecond(stats.uploadBitsPerSecond);
-      setTotalTodayBytes(stats.totalTodayBytes);
-    } catch (cause) {
-      if (cause instanceof DOMException && cause.name === 'AbortError') return;
-      setCpuPercent(null);
-      setDownloadBitsPerSecond(null);
-      setUploadBitsPerSecond(null);
-    }
-  }, []);
+  const loadStats = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        const stats = await fetchContainerStats(signal);
+        setCpuPercent(stats.cpuPercent);
+        setDownloadBitsPerSecond(stats.downloadBitsPerSecond);
+        setUploadBitsPerSecond(stats.uploadBitsPerSecond);
+        setTotalTodayBytes(stats.totalTodayBytes);
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        if (cause instanceof AuthenticationRequiredError) {
+          onAuthenticationRequired();
+          return;
+        }
+        setCpuPercent(null);
+        setDownloadBitsPerSecond(null);
+        setUploadBitsPerSecond(null);
+      }
+    },
+    [onAuthenticationRequired]
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -224,6 +287,9 @@ export function App() {
             Total today:{' '}
             <strong>{totalTodayBytes === null ? '—' : formatTrafficBytes(totalTodayBytes)}</strong>
           </div>
+          <button className="logout-button" type="button" onClick={onLogout}>
+            Sign out
+          </button>
         </div>
       </header>
 
@@ -256,5 +322,110 @@ export function App() {
         ) : null}
       </section>
     </main>
+  );
+}
+
+interface LoginProps {
+  initialError: string | null;
+  onAuthenticated: () => void;
+}
+
+function Login({ initialError, onAuthenticated }: LoginProps) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(initialError);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      await login(password);
+      setPassword('');
+      onAuthenticated();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to sign in');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="login-shell">
+      <section className="login-card" aria-labelledby="login-title">
+        <p className="eyebrow">VPN STATUS</p>
+        <h1 id="login-title">AmneziaWG</h1>
+        <p className="login-description">Enter the dashboard password to continue.</p>
+        <form className="login-form" onSubmit={(event) => void handleSubmit(event)}>
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            value={password}
+            autoComplete="current-password"
+            required
+            maxLength={1024}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          {error && (
+            <p className="login-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button type="submit" disabled={submitting}>
+            {submitting ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+type AuthenticationState = 'checking' | 'authenticated' | 'anonymous';
+
+export function App() {
+  const [authentication, setAuthentication] = useState<AuthenticationState>('checking');
+  const [authenticationError, setAuthenticationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchAuthStatus(controller.signal)
+      .then((status) => setAuthentication(status.authenticated ? 'authenticated' : 'anonymous'))
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setAuthenticationError('Unable to reach the server');
+        setAuthentication('anonymous');
+      });
+    return () => controller.abort();
+  }, []);
+
+  const handleAuthenticationRequired = useCallback(() => setAuthentication('anonymous'), []);
+  const handleLogout = useCallback(() => {
+    void logout().finally(() => setAuthentication('anonymous'));
+  }, []);
+
+  if (authentication === 'checking') {
+    return (
+      <main className="auth-loading" aria-label="Checking authentication">
+        <span className="refresh-dot" />
+      </main>
+    );
+  }
+
+  if (authentication === 'anonymous') {
+    return (
+      <Login
+        initialError={authenticationError}
+        onAuthenticated={() => {
+          setAuthenticationError(null);
+          setAuthentication('authenticated');
+        }}
+      />
+    );
+  }
+
+  return (
+    <Dashboard onAuthenticationRequired={handleAuthenticationRequired} onLogout={handleLogout} />
   );
 }

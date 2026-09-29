@@ -14,7 +14,10 @@ const config: AppConfig = {
   trafficSampleIntervalMs: 5000,
   trafficDbPath: ':memory:',
   timeZone: 'Europe/Moscow',
-  nodeEnv: 'test'
+  nodeEnv: 'test',
+  authPasswordHash: '$argon2id$v=19$m=65536,p=4,t=3$salt$hash',
+  sessionSecret: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  sessionTtlSeconds: 86_400
 };
 
 function peer(txBytes: number, rxBytes: number): AwgPeer {

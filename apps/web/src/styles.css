@@ -28,6 +28,91 @@ button {
   font: inherit;
 }
 
+.auth-loading,
+.login-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+}
+
+.auth-loading .refresh-dot {
+  width: 10px;
+  height: 10px;
+}
+
+.login-shell {
+  width: min(100% - 32px, 440px);
+  margin: 0 auto;
+  padding: 32px 0;
+}
+
+.login-card {
+  width: 100%;
+  padding: 38px;
+  border: 1px solid #222934;
+  border-radius: 16px;
+  background: #10141b;
+}
+
+.login-card h1 {
+  font-size: 38px;
+}
+
+.login-description {
+  margin: 18px 0 28px;
+  color: #929dac;
+  line-height: 1.5;
+}
+
+.login-form {
+  display: grid;
+  gap: 12px;
+}
+
+.login-form label {
+  color: #c5ccd6;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.login-form input {
+  width: 100%;
+  border: 1px solid #343e4d;
+  border-radius: 9px;
+  outline: none;
+  padding: 12px 13px;
+  background: #0b0e13;
+  color: #edf1f7;
+  font: inherit;
+}
+
+.login-form input:focus {
+  border-color: #65a9ff;
+  box-shadow: 0 0 0 3px rgb(101 169 255 / 12%);
+}
+
+.login-form button {
+  margin-top: 6px;
+  border: 0;
+  border-radius: 9px;
+  padding: 12px 16px;
+  background: #edf1f7;
+  color: #10141b;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.login-form button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.login-error {
+  margin: 0;
+  color: #efb4b5;
+  font-size: 13px;
+}
+
 .shell {
   width: min(1120px, calc(100% - 48px));
   margin: 0 auto;
@@ -149,6 +234,19 @@ h1 {
 .total-today strong {
   color: #c5ccd6;
   font-weight: 650;
+}
+
+.logout-button {
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: #7d899a;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.logout-button:hover {
+  color: #edf1f7;
 }
 
 .clients {
@@ -346,6 +444,10 @@ h1 {
 }
 
 @media (max-width: 520px) {
+  .login-card {
+    padding: 28px 22px;
+  }
+
   .shell {
     width: calc(100% - 24px);
     padding-top: 28px;

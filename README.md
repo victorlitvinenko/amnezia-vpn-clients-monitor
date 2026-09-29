@@ -7,7 +7,8 @@ Russian documentation: [README_ru.md](README_ru.md).
 ## Architecture
 
 ```text
-Browser → React → GET /api/clients and /api/stats → Fastify → dockerode
+Browser → password login → signed session cookie
+        → React → authenticated GET /api/clients and /api/stats → Fastify → dockerode
                                                ↘ SQLite traffic counters
                                                ↓
                                       /var/run/docker.sock
@@ -33,10 +34,49 @@ The backend samples AWG counters in the background. Current counters are used as
 - an existing AmneziaWG container, named `amnezia-awg2` by default;
 - access to `/var/run/docker.sock` on the Docker host.
 
+## Authentication setup
+
+Authentication is mandatory. Fastify verifies one shared dashboard password against an Argon2id hash and stores the authenticated state and expiry time in an HMAC-SHA256 signed, `HttpOnly`, `SameSite=Strict` cookie. The cookie contains no password or sensitive VPN data. The plaintext password is never stored or sent to the frontend build.
+
+Install dependencies. You may generate a strong random dashboard password, then create its Argon2id hash interactively and generate a separate 32-byte session secret:
+
+```bash
+npm install
+npm run auth:password
+npm run auth:hash
+npm run auth:secret
+```
+
+Store the output of `npm run auth:password` in a password manager. `npm run auth:hash` prompts for that password twice without displaying it; copy the resulting `$argon2id$...` line and the output of `npm run auth:secret` into `.env`:
+
+```dotenv
+AUTH_PASSWORD_HASH='$argon2id$v=19$...'
+SESSION_SECRET=64-hexadecimal-characters
+SESSION_TTL_SECONDS=86400
+```
+
+Keep the single quotes around `AUTH_PASSWORD_HASH`: they prevent Docker Compose from interpreting the `$` characters. Never commit the populated `.env` file. Changing `SESSION_SECRET` invalidates all existing sessions. Changing the password hash takes effect after the application is restarted.
+
+Alternative session-secret generators:
+
+```bash
+openssl rand -hex 32
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Alternative random-password generators:
+
+```bash
+openssl rand -base64 24
+node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))"
+```
+
 ## Local development
 
 ```bash
 npm install
+export AUTH_PASSWORD_HASH='$argon2id$v=19$...'
+export SESSION_SECRET='64-hexadecimal-characters'
 npm run dev
 ```
 
@@ -75,7 +115,9 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-By default, Compose publishes the application at `http://localhost:8080`. You can change the host port through `HOST_PORT`, for example: `HOST_PORT=8081 docker compose up -d --build`. `PORT` controls the port that Fastify listens on inside the container, while `HOST_PORT` controls the host-side mapping. Both default to `8080`. The `amnezia-awg2` container is not part of this Compose project and remains managed separately.
+Compose reads the authentication values from `.env` and publishes the application on host port `8080` by default. You can change the host port through `HOST_PORT`, for example: `HOST_PORT=8081 docker compose up -d --build`. `PORT` controls the port that Fastify listens on inside the container, while `HOST_PORT` controls the host-side mapping. Both default to `8080`. The `amnezia-awg2` container is not part of this Compose project and remains managed separately.
+
+Production session cookies are always marked `Secure`; use the dashboard through an HTTPS domain. Direct plain-HTTP access to the published host port is suitable for `/api/health` diagnostics but cannot maintain a production login session.
 
 Traffic counters are stored in the `traffic-data` named volume and survive normal container rebuilds and `docker compose down`. Running `docker compose down -v` deletes the accumulated statistics.
 
@@ -91,6 +133,9 @@ docker compose down
 | ---------------------------- | ----------------------: | ----------------------------------------------------------------------- |
 | `PORT`                       |                  `8080` | Internal Fastify HTTP port                                              |
 | `HOST_PORT`                  |                  `8080` | Docker host port published by Compose                                   |
+| `AUTH_PASSWORD_HASH`         |              _required_ | Encoded Argon2id hash of the shared dashboard password                  |
+| `SESSION_SECRET`             |              _required_ | Session signing key: exactly 32 bytes encoded as 64 hex characters      |
+| `SESSION_TTL_SECONDS`        |                 `86400` | Authenticated session lifetime in seconds                               |
 | `AMNEZIA_CONTAINER`          |          `amnezia-awg2` | Name of the existing container                                          |
 | `AMNEZIA_INTERFACE`          |                  `awg0` | AWG interface name                                                      |
 | `ONLINE_THRESHOLD_SECONDS`   |                   `180` | Maximum handshake age for an online client                              |
@@ -105,23 +150,26 @@ See `.env.example` for an example configuration. Do not expose these values thro
 ## API
 
 - `GET /api/health` checks the HTTP application;
+- `GET /api/auth/session` reports whether the current signed session is authenticated;
+- `POST /api/auth/login` verifies the password and creates a session;
+- `POST /api/auth/logout` deletes the current session;
 - `GET /api/clients` returns the current merged client snapshot with daily and monthly download totals.
 - `GET /api/stats` returns CPU load, current download/upload rates, and aggregate traffic for the current day.
 
-The dashboard refreshes both client data and CPU load every 5 seconds. If the socket, container, command, or source data is unavailable, `/api/clients` and `/api/stats` respond with status `503` and safe JSON without a stack trace. `/api/health` checks only whether the dashboard itself is ready and does not contact AmneziaWG.
+All API routes except health, login, and session-status checks require a valid session and otherwise return `401`. Login attempts are limited to five per minute. The dashboard refreshes both client data and CPU load every 5 seconds. If the socket, container, command, or source data is unavailable, `/api/clients` and `/api/stats` respond with status `503` and safe JSON without a stack trace. `/api/health` checks only whether the dashboard itself is ready and does not contact AmneziaWG.
 
 ## Docker socket security
 
 The Docker socket effectively provides elevated access to the host. The `:ro` suffix protects the socket mount as a filesystem entry, but **does not make the Docker API read-only**. The primary protection is architectural:
 
 - there is no generic Docker proxy or command execution endpoint;
-- the HTTP API accepts only `GET` requests and does not accept Docker commands;
+- the data API accepts only `GET` requests and does not accept Docker commands; the authentication API only creates or deletes the signed session;
 - the backend contains only two fixed Docker Exec calls;
 - there is no `child_process`, Docker CLI, `eval`, or start/stop/remove/create operation;
 - the dashboard container uses a read-only filesystem except for the dedicated `/app/data` statistics volume;
 - responses and ordinary logs do not include the client endpoint list.
 
-Run the dashboard only in a trusted environment and restrict external access through Dokploy/Traefik. Version 1 does not include built-in authentication.
+Run the dashboard only in a trusted environment and use HTTPS through Dokploy/Traefik. Built-in password authentication protects the dashboard data but does not reduce the privileges granted by the Docker socket.
 
 ## Dokploy
 
@@ -129,8 +177,9 @@ Run the dashboard only in a trusted environment and restrict external access thr
 2. Deploy using the root `docker-compose.yml` file.
 3. Add a domain to the `vpn-dashboard` service.
 4. Set `Container Port` to `8080` and select HTTP.
-5. Restrict access through Traefik, a reverse proxy, or an external identity-aware proxy.
-6. Check `/api/health` and `/api/clients` through the configured domain.
+5. Enable HTTPS for the domain; production authentication cookies are never sent over plain HTTP.
+6. Open the domain, sign in, and verify that the dashboard loads.
+7. Check `/api/health` separately if deployment diagnostics are needed.
 
 Publishing `HOST_PORT` is useful for self-hosted installations and does not interfere with Dokploy routing to the internal `PORT`, which defaults to `8080`. If `PORT` is changed, configure the same container port in Dokploy. If the server policy prohibits publishing host ports, remove the `ports` section in a local Compose override file.
 
@@ -144,7 +193,7 @@ docker compose logs -f vpn-dashboard
 docker ps --filter name=amnezia-awg2
 ```
 
-Check HTTP from the Docker host:
+Check the public health endpoint from the Docker host:
 
 ```bash
 curl http://localhost:8080/api/health
