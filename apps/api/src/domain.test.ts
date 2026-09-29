@@ -146,4 +146,17 @@ describe('mergeClients', () => {
     );
     expect(status).toMatchObject({ downloadTodayBytes: 128, downloadMonthBytes: 256 });
   });
+
+  it('adds current traffic rates', () => {
+    const [status] = mergeClients(
+      [runtimePeer],
+      [],
+      1000,
+      180,
+      new Map(),
+      new Map(),
+      new Map([['pub-a', { downloadBitsPerSecond: 160, uploadBitsPerSecond: 80 }]])
+    );
+    expect(status).toMatchObject({ downloadBitsPerSecond: 160, uploadBitsPerSecond: 80 });
+  });
 });

@@ -263,8 +263,8 @@ h1 {
 .client-row {
   display: grid;
   grid-template-columns:
-    minmax(240px, 1.3fr) minmax(130px, 0.55fr) minmax(130px, 0.55fr)
-    minmax(220px, 0.9fr);
+    minmax(220px, 1.3fr) minmax(115px, 0.55fr) minmax(115px, 0.55fr)
+    minmax(185px, 0.8fr) minmax(150px, 0.65fr);
   column-gap: 28px;
   align-items: center;
 }
@@ -328,6 +328,21 @@ h1 {
   font-weight: 500;
 }
 
+.client-throughput {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #c5ccd6;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.client-throughput b {
+  margin-right: 2px;
+  font-size: 13px;
+}
+
 .mobile-label {
   display: none;
 }
@@ -381,7 +396,7 @@ h1 {
   text-align: center;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1000px) {
   .shell {
     width: min(100% - 28px, 620px);
     padding: 36px 0 48px;
@@ -402,7 +417,11 @@ h1 {
     gap: 10px;
   }
   .client-row {
-    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'identity identity identity'
+      'today month traffic'
+      'connection connection connection';
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(170px, 1fr);
     gap: 22px 16px;
     min-height: 0;
     padding: 19px;
@@ -414,7 +433,19 @@ h1 {
     border-top: 1px solid #222934;
   }
   .identity {
+    grid-area: identity;
     grid-column: 1 / -1;
+  }
+  .traffic-today {
+    grid-area: today;
+  }
+  .traffic-month {
+    grid-area: month;
+  }
+  .client-throughput {
+    grid-area: traffic;
+    align-self: start;
+    justify-self: end;
   }
   .period-traffic {
     display: flex;
@@ -430,6 +461,7 @@ h1 {
     text-transform: uppercase;
   }
   .connection {
+    grid-area: connection;
     grid-column: 1 / -1;
     padding-top: 4px;
   }
@@ -465,11 +497,16 @@ h1 {
     gap: 16px;
   }
   .client-row {
-    grid-template-columns: 1fr;
+    grid-template-areas:
+      'identity identity'
+      'today traffic'
+      'month traffic'
+      'connection connection';
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 18px;
   }
   .connection {
-    grid-column: 1;
+    grid-column: 1 / -1;
     text-align: left;
   }
 }

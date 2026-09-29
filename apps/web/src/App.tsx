@@ -42,6 +42,10 @@ function isClientStatus(value: unknown): value is ClientStatus {
     typeof value.downloadTodayBytes === 'number' &&
     'downloadMonthBytes' in value &&
     typeof value.downloadMonthBytes === 'number' &&
+    'downloadBitsPerSecond' in value &&
+    isNullableNumber(value.downloadBitsPerSecond) &&
+    'uploadBitsPerSecond' in value &&
+    isNullableNumber(value.uploadBitsPerSecond) &&
     'createdAt' in value &&
     isNullableString(value.createdAt)
   );
@@ -152,6 +156,9 @@ interface ClientRowProps {
 }
 
 function ClientRow({ client }: ClientRowProps) {
+  const hasTraffic =
+    (client.downloadBitsPerSecond ?? 0) > 0 || (client.uploadBitsPerSecond ?? 0) > 0;
+
   return (
     <article className="client-row">
       <div className="identity">
@@ -161,13 +168,29 @@ function ClientRow({ client }: ClientRowProps) {
         />
         <strong>{client.name}</strong>
       </div>
-      <div className="period-traffic" aria-label="Download today">
+      <div className="period-traffic traffic-today" aria-label="Download today">
         <span className="mobile-label">↓ Today</span>
         <strong>{formatTrafficBytes(client.downloadTodayBytes)}</strong>
       </div>
-      <div className="period-traffic" aria-label="Download this month">
+      <div className="period-traffic traffic-month" aria-label="Download this month">
         <span className="mobile-label">↓ Month</span>
         <strong>{formatTrafficBytes(client.downloadMonthBytes)}</strong>
+      </div>
+      <div
+        className="client-throughput"
+        aria-hidden={!hasTraffic}
+        aria-label={hasTraffic ? 'Current client traffic speed' : undefined}
+      >
+        {hasTraffic && (
+          <>
+            <span className="download">
+              <b>↓</b> {formatBitRate(client.downloadBitsPerSecond)}
+            </span>
+            <span className="upload">
+              <b>↑</b> {formatBitRate(client.uploadBitsPerSecond)}
+            </span>
+          </>
+        )}
       </div>
       <div className="connection">
         <span>{formatHandshakeAge(client.handshakeAgeSeconds)}</span>
@@ -270,7 +293,7 @@ function Dashboard({ onAuthenticationRequired, onLogout }: DashboardProps) {
       <header className="topbar">
         <div>
           <p className="eyebrow">VPN STATUS</p>
-          <h1>AmneziaWG</h1>
+          <h1>AmneziaVPN Clients Monitor</h1>
           <p className="summary">
             <strong>{onlineClients}</strong> online <span>/</span> {clients.length} clients
           </p>
@@ -325,6 +348,7 @@ function Dashboard({ onAuthenticationRequired, onLogout }: DashboardProps) {
           <span>Client</span>
           <span>↓ Today</span>
           <span>↓ Month</span>
+          <span>Traffic</span>
           <span>Connection</span>
         </div>
         {loading ? (

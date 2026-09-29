@@ -57,7 +57,35 @@ describe('MonitoringService', () => {
       totalTodayBytes: 150
     });
     await expect(service.getClients()).resolves.toEqual([
-      expect.objectContaining({ downloadTodayBytes: 100, downloadMonthBytes: 1_100 })
+      expect.objectContaining({
+        downloadTodayBytes: 100,
+        downloadMonthBytes: 1_100,
+        downloadBitsPerSecond: 160,
+        uploadBitsPerSecond: 80
+      })
+    ]);
+    await service.close();
+  });
+
+  it('returns null before rates can be calculated and zero after counters reset', async () => {
+    let now = Date.UTC(2026, 8, 29, 9);
+    let currentPeer = peer(1_000, 200);
+    const service = new MonitoringService(config, {
+      now: () => now,
+      store: new TrafficStore(':memory:', config.timeZone),
+      loadSources: async () => ({ peers: [currentPeer], clients: [] })
+    });
+
+    await service.refresh();
+    await expect(service.getClients()).resolves.toEqual([
+      expect.objectContaining({ downloadBitsPerSecond: null, uploadBitsPerSecond: null })
+    ]);
+
+    now += 5_000;
+    currentPeer = peer(10, 5);
+    await service.refresh();
+    await expect(service.getClients()).resolves.toEqual([
+      expect.objectContaining({ downloadBitsPerSecond: 0, uploadBitsPerSecond: 0 })
     ]);
     await service.close();
   });

@@ -8,6 +8,8 @@ export interface ClientStatus {
   endpoint: string | null;
   downloadTodayBytes: number;
   downloadMonthBytes: number;
+  downloadBitsPerSecond: number | null;
+  uploadBitsPerSecond: number | null;
   createdAt: string | null;
 }
 

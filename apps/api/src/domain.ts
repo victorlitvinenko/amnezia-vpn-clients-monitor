@@ -28,6 +28,11 @@ export interface ClientTrafficUsage {
   downloadMonthBytes: number;
 }
 
+export interface ClientTrafficRate {
+  downloadBitsPerSecond: number | null;
+  uploadBitsPerSecond: number | null;
+}
+
 function numberField(value: string | undefined): number | null {
   if (value === undefined || value.trim() === '') return null;
   const parsed = Number(value);
@@ -91,6 +96,7 @@ function statusFor(
   client: ClientMetadata | undefined,
   peer: AwgPeer | undefined,
   traffic: ClientTrafficUsage | undefined,
+  rate: ClientTrafficRate | undefined,
   storedHandshake: number | undefined,
   nowUnix: number,
   threshold: number
@@ -110,6 +116,8 @@ function statusFor(
     endpoint: peer?.endpoint ?? null,
     downloadTodayBytes: traffic?.downloadTodayBytes ?? 0,
     downloadMonthBytes: traffic?.downloadMonthBytes ?? 0,
+    downloadBitsPerSecond: rate?.downloadBitsPerSecond ?? null,
+    uploadBitsPerSecond: rate?.uploadBitsPerSecond ?? null,
     createdAt: client?.userData?.creationDate ?? null
   };
 }
@@ -120,7 +128,8 @@ export function mergeClients(
   nowUnix: number,
   threshold: number,
   trafficByClient: ReadonlyMap<string, ClientTrafficUsage> = new Map(),
-  lastHandshakeByClient: ReadonlyMap<string, number> = new Map()
+  lastHandshakeByClient: ReadonlyMap<string, number> = new Map(),
+  ratesByClient: ReadonlyMap<string, ClientTrafficRate> = new Map()
 ): ClientStatus[] {
   const peersByKey = new Map(peers.map((peer) => [peer.publicKey, peer]));
   const clientsByKey = new Map(clients.map((client) => [client.clientId, client]));
@@ -131,6 +140,7 @@ export function mergeClients(
       clientsByKey.get(id),
       peersByKey.get(id),
       trafficByClient.get(id),
+      ratesByClient.get(id),
       lastHandshakeByClient.get(id),
       nowUnix,
       threshold

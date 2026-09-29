@@ -7,7 +7,8 @@ import {
   parseAwgDump,
   parseClientsTable,
   type AwgPeer,
-  type ClientMetadata
+  type ClientMetadata,
+  type ClientTrafficRate
 } from './domain.js';
 import { TrafficStore } from './traffic-store.js';
 
@@ -120,14 +121,23 @@ export class MonitoringService {
     const elapsedSeconds = previous ? (sampledAtMs - previous.sampledAtMs) / 1000 : 0;
     let downloadDelta = 0;
     let uploadDelta = 0;
+    const ratesByClient = new Map<string, ClientTrafficRate>();
 
     if (previous && elapsedSeconds > 0) {
       const previousByKey = new Map(previous.peers.map((peer) => [peer.publicKey, peer]));
       for (const peer of peers) {
         const oldPeer = previousByKey.get(peer.publicKey);
         if (!oldPeer) continue;
-        if (peer.txBytes >= oldPeer.txBytes) downloadDelta += peer.txBytes - oldPeer.txBytes;
-        if (peer.rxBytes >= oldPeer.rxBytes) uploadDelta += peer.rxBytes - oldPeer.rxBytes;
+        const peerDownloadDelta =
+          peer.txBytes >= oldPeer.txBytes ? peer.txBytes - oldPeer.txBytes : 0;
+        const peerUploadDelta =
+          peer.rxBytes >= oldPeer.rxBytes ? peer.rxBytes - oldPeer.rxBytes : 0;
+        downloadDelta += peerDownloadDelta;
+        uploadDelta += peerUploadDelta;
+        ratesByClient.set(peer.publicKey, {
+          downloadBitsPerSecond: (peerDownloadDelta * 8) / elapsedSeconds,
+          uploadBitsPerSecond: (peerUploadDelta * 8) / elapsedSeconds
+        });
       }
     }
 
@@ -137,7 +147,8 @@ export class MonitoringService {
       Math.floor(sampledAtMs / 1000),
       this.config.onlineThresholdSeconds,
       stored.trafficByClient,
-      stored.lastHandshakeByClient
+      stored.lastHandshakeByClient,
+      ratesByClient
     );
     this.runtimeSnapshot = { peers, sampledAtMs };
     this.stats = {
