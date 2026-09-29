@@ -1,0 +1,29 @@
+{
+  "name": "amnezia-vpn-clients-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c cyan,magenta \"npm run dev -w @awg-monitor/api\" \"npm run dev -w @awg-monitor/web\"",
+    "build": "npm run build -w @awg-monitor/shared && npm run build -w @awg-monitor/api && npm run build -w @awg-monitor/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "oxlint .",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "oxfmt": "^0.71.0",
+    "oxlint": "^1.86.0",
+    "oxlint-tsgolint": "^7.0.2003",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
