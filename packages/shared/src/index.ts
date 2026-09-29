@@ -36,3 +36,9 @@ export interface ContainerStats {
   uploadBitsPerSecond: number | null;
   totalTodayBytes: number;
 }
+
+export interface DashboardSnapshot {
+  sampledAt: number;
+  clients: ClientStatus[];
+  stats: ContainerStats;
+}

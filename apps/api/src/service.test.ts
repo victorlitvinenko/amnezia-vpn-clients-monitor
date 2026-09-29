@@ -64,6 +64,14 @@ describe('MonitoringService', () => {
         uploadBitsPerSecond: 80
       })
     ]);
+    await expect(service.getSnapshot()).resolves.toMatchObject({
+      sampledAt: now,
+      traffic: {
+        downloadBitsPerSecond: 160,
+        uploadBitsPerSecond: 80,
+        totalTodayBytes: 150
+      }
+    });
     await service.close();
   });
 

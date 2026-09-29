@@ -1,4 +1,10 @@
-import type { AuthStatus, ClientStatus, ContainerStats, LoginRequest } from '@awg-monitor/shared';
+import type {
+  AuthStatus,
+  ClientStatus,
+  ContainerStats,
+  DashboardSnapshot,
+  LoginRequest
+} from '@awg-monitor/shared';
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
@@ -56,58 +62,57 @@ function apiErrorMessage(value: unknown): string | null {
   return typeof value.error === 'string' ? value.error : null;
 }
 
-async function fetchClients(signal?: AbortSignal): Promise<ClientStatus[]> {
-  const response = await fetch('/api/clients', {
+function isContainerStats(value: unknown): value is ContainerStats {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'cpuPercent' in value &&
+    typeof value.cpuPercent === 'number' &&
+    Number.isFinite(value.cpuPercent) &&
+    'uptimeSeconds' in value &&
+    typeof value.uptimeSeconds === 'number' &&
+    Number.isFinite(value.uptimeSeconds) &&
+    value.uptimeSeconds >= 0 &&
+    'downloadBitsPerSecond' in value &&
+    isNullableNumber(value.downloadBitsPerSecond) &&
+    'uploadBitsPerSecond' in value &&
+    isNullableNumber(value.uploadBitsPerSecond) &&
+    'totalTodayBytes' in value &&
+    typeof value.totalTodayBytes === 'number' &&
+    Number.isFinite(value.totalTodayBytes)
+  );
+}
+
+async function fetchDashboard(signal?: AbortSignal): Promise<DashboardSnapshot> {
+  const response = await fetch('/api/dashboard', {
     ...(signal ? { signal } : {}),
     headers: { Accept: 'application/json' }
   });
   if (response.status === 401) throw new AuthenticationRequiredError();
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => null);
-    throw new Error(apiErrorMessage(body) ?? 'Unable to load AmneziaWG status');
+    throw new Error(apiErrorMessage(body) ?? 'Unable to load AmneziaWG dashboard');
   }
-  const body: unknown = await response.json();
-  if (!Array.isArray(body) || !body.every(isClientStatus)) {
-    throw new Error('Invalid AmneziaWG status response');
-  }
-  return body;
-}
-
-async function fetchContainerStats(signal?: AbortSignal): Promise<ContainerStats> {
-  const response = await fetch('/api/stats', {
-    ...(signal ? { signal } : {}),
-    headers: { Accept: 'application/json' }
-  });
-  if (response.status === 401) throw new AuthenticationRequiredError();
-  if (!response.ok) throw new Error('Unable to load container stats');
-
   const body: unknown = await response.json();
   if (
     typeof body !== 'object' ||
     body === null ||
-    !('cpuPercent' in body) ||
-    typeof body.cpuPercent !== 'number' ||
-    !Number.isFinite(body.cpuPercent) ||
-    !('uptimeSeconds' in body) ||
-    typeof body.uptimeSeconds !== 'number' ||
-    !Number.isFinite(body.uptimeSeconds) ||
-    body.uptimeSeconds < 0 ||
-    !('downloadBitsPerSecond' in body) ||
-    !isNullableNumber(body.downloadBitsPerSecond) ||
-    !('uploadBitsPerSecond' in body) ||
-    !isNullableNumber(body.uploadBitsPerSecond) ||
-    !('totalTodayBytes' in body) ||
-    typeof body.totalTodayBytes !== 'number' ||
-    !Number.isFinite(body.totalTodayBytes)
+    !('sampledAt' in body) ||
+    typeof body.sampledAt !== 'number' ||
+    !Number.isFinite(body.sampledAt) ||
+    body.sampledAt < 0 ||
+    !('clients' in body) ||
+    !Array.isArray(body.clients) ||
+    !body.clients.every(isClientStatus) ||
+    !('stats' in body) ||
+    !isContainerStats(body.stats)
   ) {
-    throw new Error('Invalid container stats response');
+    throw new Error('Invalid AmneziaWG dashboard response');
   }
   return {
-    cpuPercent: body.cpuPercent,
-    uptimeSeconds: body.uptimeSeconds,
-    downloadBitsPerSecond: body.downloadBitsPerSecond,
-    uploadBitsPerSecond: body.uploadBitsPerSecond,
-    totalTodayBytes: body.totalTodayBytes
+    sampledAt: body.sampledAt,
+    clients: body.clients,
+    stats: body.stats
   };
 }
 
@@ -229,8 +234,13 @@ function Dashboard({ onAuthenticationRequired, onLogout }: DashboardProps) {
     async (signal?: AbortSignal) => {
       setRefreshing(true);
       try {
-        const nextClients = await fetchClients(signal);
-        setClients(nextClients);
+        const snapshot = await fetchDashboard(signal);
+        setClients(snapshot.clients);
+        setCpuPercent(snapshot.stats.cpuPercent);
+        setUptimeSeconds(snapshot.stats.uptimeSeconds);
+        setDownloadBitsPerSecond(snapshot.stats.downloadBitsPerSecond);
+        setUploadBitsPerSecond(snapshot.stats.uploadBitsPerSecond);
+        setTotalTodayBytes(snapshot.stats.totalTodayBytes);
         setError(null);
       } catch (cause) {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
@@ -247,43 +257,17 @@ function Dashboard({ onAuthenticationRequired, onLogout }: DashboardProps) {
     [onAuthenticationRequired]
   );
 
-  const loadStats = useCallback(
-    async (signal?: AbortSignal) => {
-      try {
-        const stats = await fetchContainerStats(signal);
-        setCpuPercent(stats.cpuPercent);
-        setUptimeSeconds(stats.uptimeSeconds);
-        setDownloadBitsPerSecond(stats.downloadBitsPerSecond);
-        setUploadBitsPerSecond(stats.uploadBitsPerSecond);
-        setTotalTodayBytes(stats.totalTodayBytes);
-      } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        if (cause instanceof AuthenticationRequiredError) {
-          onAuthenticationRequired();
-          return;
-        }
-        setCpuPercent(null);
-        setUptimeSeconds(null);
-        setDownloadBitsPerSecond(null);
-        setUploadBitsPerSecond(null);
-      }
-    },
-    [onAuthenticationRequired]
-  );
-
   useEffect(() => {
     const controller = new AbortController();
     void load(controller.signal);
-    void loadStats(controller.signal);
     const interval = window.setInterval(() => {
       void load();
-      void loadStats();
     }, REFRESH_INTERVAL_MS);
     return () => {
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [load, loadStats]);
+  }, [load]);
 
   const sortedClients = useMemo(() => sortClients(clients), [clients]);
   const onlineClients = clients.filter((client) => client.online).length;

@@ -8,7 +8,7 @@ Russian documentation: [README_ru.md](README_ru.md).
 
 ```text
 Browser → password login → signed session cookie
-        → React → authenticated GET /api/clients and /api/stats → Fastify → dockerode
+        → React → authenticated GET /api/dashboard → Fastify → dockerode
                                                ↘ SQLite traffic counters
                                                ↓
                                       /var/run/docker.sock
@@ -153,10 +153,11 @@ See `.env.example` for an example configuration. Do not expose these values thro
 - `GET /api/auth/session` reports whether the current signed session is authenticated;
 - `POST /api/auth/login` verifies the password and creates a session;
 - `POST /api/auth/logout` deletes the current session;
+- `GET /api/dashboard` returns clients and container statistics from one consistent traffic snapshot;
 - `GET /api/clients` returns the current merged client snapshot with daily and monthly download totals.
 - `GET /api/stats` returns container CPU load and uptime, current download/upload rates, and aggregate traffic for the current day.
 
-All API routes except health, login, and session-status checks require a valid session and otherwise return `401`. Login attempts are limited to five per minute. The dashboard refreshes client data and container statistics every 5 seconds. If the socket, container, command, or source data is unavailable, `/api/clients` and `/api/stats` respond with status `503` and safe JSON without a stack trace. `/api/health` checks only whether the dashboard itself is ready and does not contact AmneziaWG.
+All API routes except health, login, and session-status checks require a valid session and otherwise return `401`. Login attempts are limited to five per minute. The dashboard refreshes its consistent combined snapshot every 5 seconds. If the socket, container, command, or source data is unavailable, `/api/dashboard`, `/api/clients`, and `/api/stats` respond with status `503` and safe JSON without a stack trace. `/api/health` checks only whether the dashboard itself is ready and does not contact AmneziaWG.
 
 ## Docker socket security
 

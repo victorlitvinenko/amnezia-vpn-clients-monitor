@@ -18,6 +18,12 @@ export interface TrafficStats {
   totalTodayBytes: number;
 }
 
+export interface MonitoringSnapshot {
+  sampledAt: number;
+  clients: ClientStatus[];
+  traffic: TrafficStats;
+}
+
 interface RuntimeSnapshot {
   peers: AwgPeer[];
   sampledAtMs: number;
@@ -77,12 +83,22 @@ export class MonitoringService {
   }
 
   async getClients(): Promise<ClientStatus[]> {
+    return (await this.getSnapshot()).clients;
+  }
+
+  async getSnapshot(): Promise<MonitoringSnapshot> {
     const sampledAtMs = this.runtimeSnapshot?.sampledAtMs ?? 0;
     if (!this.clients || this.now() - sampledAtMs >= this.config.cacheTtlMs) {
       await this.refresh();
     }
-    if (!this.clients) throw new Error('No AmneziaWG snapshot is available');
-    return this.clients;
+    if (!this.clients || !this.runtimeSnapshot) {
+      throw new Error('No AmneziaWG snapshot is available');
+    }
+    return {
+      sampledAt: this.runtimeSnapshot.sampledAtMs,
+      clients: this.clients,
+      traffic: { ...this.stats }
+    };
   }
 
   getTrafficStats(): TrafficStats {

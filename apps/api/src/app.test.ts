@@ -126,6 +126,41 @@ describe('API', () => {
     });
   });
 
+  it('returns clients and stats from one dashboard snapshot', async () => {
+    app = await buildApp({
+      config,
+      getClients: async () => [],
+      getContainerStats: async () => ({ cpuPercent: 12.5, uptimeSeconds: 1_062_000 }),
+      getDashboardSnapshot: async () => ({
+        sampledAt: 1_790_697_000_000,
+        clients: [],
+        traffic: {
+          downloadBitsPerSecond: 24_200_000,
+          uploadBitsPerSecond: 3_800_000,
+          totalTodayBytes: 18_700_000_000
+        }
+      })
+    });
+    const cookie = await authenticatedCookie(app);
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/dashboard',
+      headers: { cookie }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      sampledAt: 1_790_697_000_000,
+      clients: [],
+      stats: {
+        cpuPercent: 12.5,
+        uptimeSeconds: 1_062_000,
+        downloadBitsPerSecond: 24_200_000,
+        uploadBitsPerSecond: 3_800_000,
+        totalTodayBytes: 18_700_000_000
+      }
+    });
+  });
+
   it('returns a safe JSON error when container stats are unavailable', async () => {
     app = await buildApp({
       config,

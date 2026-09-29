@@ -5,6 +5,7 @@ import type {
   AuthStatus,
   ClientStatus,
   ContainerStats,
+  DashboardSnapshot,
   HealthResponse,
   LoginRequest
 } from '@awg-monitor/shared';
@@ -22,13 +23,14 @@ import {
 } from './auth.js';
 import type { AppConfig } from './config.js';
 import { getContainerRuntimeStats, type ContainerRuntimeStats } from './docker.js';
-import { createMonitoringService, type TrafficStats } from './service.js';
+import { createMonitoringService, type MonitoringSnapshot, type TrafficStats } from './service.js';
 
 interface BuildAppOptions {
   config: AppConfig;
   getClients?: () => Promise<ClientStatus[]>;
   getContainerStats?: () => Promise<ContainerRuntimeStats>;
   getTrafficStats?: () => TrafficStats;
+  getDashboardSnapshot?: () => Promise<MonitoringSnapshot>;
 }
 
 const loginSchema = z.object({
@@ -42,7 +44,8 @@ export async function buildApp({
   config,
   getClients,
   getContainerStats,
-  getTrafficStats
+  getTrafficStats,
+  getDashboardSnapshot
 }: BuildAppOptions): Promise<FastifyInstance> {
   const app = fastify({ logger: true });
   const monitor = getClients ? undefined : createMonitoringService(config);
@@ -57,6 +60,15 @@ export async function buildApp({
         uploadBitsPerSecond: null,
         totalTodayBytes: 0
       });
+  const loadDashboardSnapshot =
+    getDashboardSnapshot ??
+    (monitor
+      ? () => monitor.getSnapshot()
+      : async () => ({
+          sampledAt: Date.now(),
+          clients: await loadClients(),
+          traffic: loadTrafficStats()
+        }));
 
   if (monitor) {
     monitor.start(app.log);
@@ -119,6 +131,22 @@ export async function buildApp({
     } catch (error) {
       app.log.error({ err: error }, 'Unable to read AmneziaWG state');
       return reply.code(503).send({ error: 'Unable to read AmneziaWG state' });
+    }
+  });
+  app.get<{ Reply: DashboardSnapshot | ApiError }>('/api/dashboard', async (_request, reply) => {
+    try {
+      const [snapshot, container] = await Promise.all([
+        loadDashboardSnapshot(),
+        loadContainerStats()
+      ]);
+      return {
+        sampledAt: snapshot.sampledAt,
+        clients: snapshot.clients,
+        stats: { ...container, ...snapshot.traffic }
+      };
+    } catch (error) {
+      app.log.error({ err: error }, 'Unable to read AmneziaWG dashboard');
+      return reply.code(503).send({ error: 'Unable to read AmneziaWG dashboard' });
     }
   });
   app.get<{ Reply: ContainerStats | ApiError }>('/api/stats', async (_request, reply) => {
