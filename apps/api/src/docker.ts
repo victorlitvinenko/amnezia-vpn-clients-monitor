@@ -16,6 +16,11 @@ interface CpuStatsSnapshot {
   };
 }
 
+export interface ContainerRuntimeStats {
+  cpuPercent: number;
+  uptimeSeconds: number;
+}
+
 function collect(stream: PassThrough): Promise<string> {
   const chunks: Buffer[] = [];
   stream.on('data', (chunk: Buffer | string) => {
@@ -117,7 +122,23 @@ export function calculateCpuPercent(stats: CpuStatsSnapshot): number {
   return (cpuDelta / systemDelta) * cpuCount * 100;
 }
 
-export async function getContainerCpuPercent(containerName: string): Promise<number> {
-  const stats = await docker.getContainer(containerName).stats({ stream: false });
-  return calculateCpuPercent(stats);
+export function calculateContainerUptimeSeconds(startedAt: string, nowMs: number): number {
+  const startedAtMs = Date.parse(startedAt);
+  if (!Number.isFinite(startedAtMs)) throw new Error('Invalid AmneziaWG container start time');
+  return Math.max(0, Math.floor((nowMs - startedAtMs) / 1000));
+}
+
+export async function getContainerRuntimeStats(
+  containerName: string,
+  nowMs = Date.now()
+): Promise<ContainerRuntimeStats> {
+  const container = docker.getContainer(containerName);
+  const [stats, details] = await Promise.all([
+    container.stats({ stream: false }),
+    container.inspect()
+  ]);
+  return {
+    cpuPercent: calculateCpuPercent(stats),
+    uptimeSeconds: calculateContainerUptimeSeconds(details.State.StartedAt, nowMs)
+  };
 }

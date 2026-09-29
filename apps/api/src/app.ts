@@ -21,13 +21,13 @@ import {
   verifyPassword
 } from './auth.js';
 import type { AppConfig } from './config.js';
-import { getContainerCpuPercent } from './docker.js';
+import { getContainerRuntimeStats, type ContainerRuntimeStats } from './docker.js';
 import { createMonitoringService, type TrafficStats } from './service.js';
 
 interface BuildAppOptions {
   config: AppConfig;
   getClients?: () => Promise<ClientStatus[]>;
-  getCpuPercent?: () => Promise<number>;
+  getContainerStats?: () => Promise<ContainerRuntimeStats>;
   getTrafficStats?: () => TrafficStats;
 }
 
@@ -41,13 +41,14 @@ const DEVELOPMENT_COOKIE_NAME = 'awg-session';
 export async function buildApp({
   config,
   getClients,
-  getCpuPercent,
+  getContainerStats,
   getTrafficStats
 }: BuildAppOptions): Promise<FastifyInstance> {
   const app = fastify({ logger: true });
   const monitor = getClients ? undefined : createMonitoringService(config);
   const loadClients = getClients ?? (() => monitor!.getClients());
-  const loadCpuPercent = getCpuPercent ?? (() => getContainerCpuPercent(config.containerName));
+  const loadContainerStats =
+    getContainerStats ?? (() => getContainerRuntimeStats(config.containerName));
   const loadTrafficStats =
     getTrafficStats ??
     (() =>
@@ -123,8 +124,8 @@ export async function buildApp({
   app.get<{ Reply: ContainerStats | ApiError }>('/api/stats', async (_request, reply) => {
     try {
       const traffic = loadTrafficStats();
-      const cpuPercent = await loadCpuPercent();
-      return { cpuPercent, ...traffic };
+      const container = await loadContainerStats();
+      return { ...container, ...traffic };
     } catch (error) {
       app.log.error({ err: error }, 'Unable to read AmneziaWG container stats');
       return reply.code(503).send({ error: 'Unable to read AmneziaWG container stats' });

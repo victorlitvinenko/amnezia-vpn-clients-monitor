@@ -173,6 +173,7 @@ h1 {
 }
 
 .cpu-load,
+.uptime,
 .refresh {
   display: flex;
   align-items: center;
@@ -183,13 +184,15 @@ h1 {
   letter-spacing: 0.09em;
 }
 
-.cpu-load {
+.cpu-load,
+.uptime {
   padding-right: 16px;
   border-right: 1px solid #29313d;
   font-variant-numeric: tabular-nums;
 }
 
-.cpu-load strong {
+.cpu-load strong,
+.uptime strong {
   min-width: 42px;
   color: #c5ccd6;
   font-weight: 650;

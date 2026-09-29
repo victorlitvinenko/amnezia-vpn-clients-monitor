@@ -2,7 +2,11 @@ import { PassThrough } from 'node:stream';
 
 import { describe, expect, it } from 'vitest';
 
-import { calculateCpuPercent, demultiplexDockerStream } from './docker.js';
+import {
+  calculateContainerUptimeSeconds,
+  calculateCpuPercent,
+  demultiplexDockerStream
+} from './docker.js';
 
 function dockerFrame(streamType: 1 | 2, text: string): Buffer {
   const content = Buffer.from(text);
@@ -63,5 +67,20 @@ describe('calculateCpuPercent', () => {
         }
       })
     ).toBe(0);
+  });
+});
+
+describe('calculateContainerUptimeSeconds', () => {
+  it('calculates uptime from the Docker container start time', () => {
+    const startedAt = '2026-09-17T04:00:00.000Z';
+    const now = Date.parse('2026-09-29T11:00:00.000Z');
+
+    expect(calculateContainerUptimeSeconds(startedAt, now)).toBe(12 * 86_400 + 7 * 3_600);
+  });
+
+  it('rejects an invalid Docker container start time', () => {
+    expect(() => calculateContainerUptimeSeconds('invalid', Date.now())).toThrow(
+      'Invalid AmneziaWG container start time'
+    );
   });
 });

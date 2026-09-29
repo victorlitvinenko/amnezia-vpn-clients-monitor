@@ -99,11 +99,11 @@ describe('API', () => {
     expect(logout.statusCode).toBe(204);
   });
 
-  it('returns the AmneziaWG container CPU load', async () => {
+  it('returns the AmneziaWG container CPU load and uptime', async () => {
     app = await buildApp({
       config,
       getClients: async () => [],
-      getCpuPercent: async () => 12.5,
+      getContainerStats: async () => ({ cpuPercent: 12.5, uptimeSeconds: 1_062_000 }),
       getTrafficStats: () => ({
         downloadBitsPerSecond: 24_200_000,
         uploadBitsPerSecond: 3_800_000,
@@ -119,6 +119,7 @@ describe('API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       cpuPercent: 12.5,
+      uptimeSeconds: 1_062_000,
       downloadBitsPerSecond: 24_200_000,
       uploadBitsPerSecond: 3_800_000,
       totalTodayBytes: 18_700_000_000
@@ -129,7 +130,7 @@ describe('API', () => {
     app = await buildApp({
       config,
       getClients: async () => [],
-      getCpuPercent: async () => {
+      getContainerStats: async () => {
         throw new Error('socket detail');
       }
     });

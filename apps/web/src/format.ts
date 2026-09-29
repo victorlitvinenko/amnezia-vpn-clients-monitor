@@ -22,6 +22,16 @@ export function formatBitRate(bitsPerSecond: number | null): string {
   return `${Number(value.toFixed(digits))} ${units[power]}`;
 }
 
+export function formatUptime(seconds: number | null): string {
+  if (seconds === null || !Number.isFinite(seconds) || seconds < 0) return '—';
+  const wholeSeconds = Math.floor(seconds);
+  const days = Math.floor(wholeSeconds / 86_400);
+  const hours = Math.floor((wholeSeconds % 86_400) / 3_600);
+  if (days > 0) return `${days}d ${hours}h`;
+  const minutes = Math.floor((wholeSeconds % 3_600) / 60);
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
 export function formatHandshakeAge(seconds: number | null): string {
   if (seconds === null) return 'Never connected';
   if (seconds < 60) return `${seconds} sec ago`;

@@ -29,6 +29,7 @@ export interface HealthResponse {
 
 export interface ContainerStats {
   cpuPercent: number;
+  uptimeSeconds: number;
   downloadBitsPerSecond: number | null;
   uploadBitsPerSecond: number | null;
   totalTodayBytes: number;

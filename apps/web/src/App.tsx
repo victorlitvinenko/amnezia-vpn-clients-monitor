@@ -1,7 +1,13 @@
 import type { AuthStatus, ClientStatus, ContainerStats, LoginRequest } from '@awg-monitor/shared';
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
-import { formatBitRate, formatHandshakeAge, formatTrafficBytes, sortClients } from './format';
+import {
+  formatBitRate,
+  formatHandshakeAge,
+  formatTrafficBytes,
+  formatUptime,
+  sortClients
+} from './format';
 
 const REFRESH_INTERVAL_MS = 5_000;
 
@@ -78,6 +84,10 @@ async function fetchContainerStats(signal?: AbortSignal): Promise<ContainerStats
     !('cpuPercent' in body) ||
     typeof body.cpuPercent !== 'number' ||
     !Number.isFinite(body.cpuPercent) ||
+    !('uptimeSeconds' in body) ||
+    typeof body.uptimeSeconds !== 'number' ||
+    !Number.isFinite(body.uptimeSeconds) ||
+    body.uptimeSeconds < 0 ||
     !('downloadBitsPerSecond' in body) ||
     !isNullableNumber(body.downloadBitsPerSecond) ||
     !('uploadBitsPerSecond' in body) ||
@@ -90,6 +100,7 @@ async function fetchContainerStats(signal?: AbortSignal): Promise<ContainerStats
   }
   return {
     cpuPercent: body.cpuPercent,
+    uptimeSeconds: body.uptimeSeconds,
     downloadBitsPerSecond: body.downloadBitsPerSecond,
     uploadBitsPerSecond: body.uploadBitsPerSecond,
     totalTodayBytes: body.totalTodayBytes
@@ -186,6 +197,7 @@ function Dashboard({ onAuthenticationRequired, onLogout }: DashboardProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cpuPercent, setCpuPercent] = useState<number | null>(null);
+  const [uptimeSeconds, setUptimeSeconds] = useState<number | null>(null);
   const [downloadBitsPerSecond, setDownloadBitsPerSecond] = useState<number | null>(null);
   const [uploadBitsPerSecond, setUploadBitsPerSecond] = useState<number | null>(null);
   const [totalTodayBytes, setTotalTodayBytes] = useState<number | null>(null);
@@ -217,6 +229,7 @@ function Dashboard({ onAuthenticationRequired, onLogout }: DashboardProps) {
       try {
         const stats = await fetchContainerStats(signal);
         setCpuPercent(stats.cpuPercent);
+        setUptimeSeconds(stats.uptimeSeconds);
         setDownloadBitsPerSecond(stats.downloadBitsPerSecond);
         setUploadBitsPerSecond(stats.uploadBitsPerSecond);
         setTotalTodayBytes(stats.totalTodayBytes);
@@ -227,6 +240,7 @@ function Dashboard({ onAuthenticationRequired, onLogout }: DashboardProps) {
           return;
         }
         setCpuPercent(null);
+        setUptimeSeconds(null);
         setDownloadBitsPerSecond(null);
         setUploadBitsPerSecond(null);
       }
@@ -266,6 +280,10 @@ function Dashboard({ onAuthenticationRequired, onLogout }: DashboardProps) {
             <div className="cpu-load" aria-label="AmneziaWG container CPU load">
               <span>CPU</span>
               <strong>{cpuPercent === null ? '—' : `${cpuPercent.toFixed(1)}%`}</strong>
+            </div>
+            <div className="uptime" aria-label="AmneziaWG container uptime">
+              <span>UPTIME</span>
+              <strong>{formatUptime(uptimeSeconds)}</strong>
             </div>
             <div
               className={`refresh ${refreshing ? 'active' : ''}`}
