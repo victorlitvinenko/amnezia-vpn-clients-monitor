@@ -28,5 +28,11 @@
   },
   "engines": {
     "node": ">=24"
+  },
+  "allowScripts": {
+    "argon2@0.45.1": true,
+    "esbuild@0.28.2": true,
+    "protobufjs@7.6.6": true,
+    "ssh2@1.17.0": true
   }
 }
