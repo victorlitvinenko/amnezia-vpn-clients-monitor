@@ -1,4 +1,4 @@
-import type { ClientStatus } from '@awg-monitor/shared';
+import type { ClientStatus } from '@amnezia-vpn-monitor/shared';
 
 import type { AppConfig } from './config.js';
 import { getAwgDump, getClientsTable } from './docker.js';

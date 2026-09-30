@@ -111,7 +111,7 @@ Build the monorepo locally:
 ```bash
 npm install
 npm run build
-NODE_ENV=production npm run start -w @awg-monitor/api
+NODE_ENV=production npm run start -w @amnezia-vpn-monitor/api
 ```
 
 The production version should normally be started with Docker Compose so that the Docker socket is mounted correctly.

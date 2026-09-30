@@ -4,7 +4,7 @@ import type {
   ContainerStats,
   DashboardSnapshot,
   LoginRequest
-} from '@awg-monitor/shared';
+} from '@amnezia-vpn-monitor/shared';
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import {

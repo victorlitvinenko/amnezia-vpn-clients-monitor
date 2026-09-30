@@ -1,5 +1,5 @@
 {
-  "name": "@awg-monitor/api",
+  "name": "@amnezia-vpn-monitor/api",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "auth:hash": "node scripts/hash-password.mjs"
   },
   "dependencies": {
-    "@awg-monitor/shared": "1.0.0",
+    "@amnezia-vpn-monitor/shared": "1.0.0",
     "@fastify/cookie": "^11.1.2",
     "@fastify/rate-limit": "^11.2.0",
     "@fastify/static": "^10.1.5",

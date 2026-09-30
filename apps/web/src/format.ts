@@ -1,4 +1,4 @@
-import type { ClientStatus } from '@awg-monitor/shared';
+import type { ClientStatus } from '@amnezia-vpn-monitor/shared';
 
 export function formatTrafficBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';

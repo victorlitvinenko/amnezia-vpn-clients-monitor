@@ -9,7 +9,7 @@ import type {
   HealthResponse,
   LoginRequest,
   SetupRequest
-} from '@awg-monitor/shared';
+} from '@amnezia-vpn-monitor/shared';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';

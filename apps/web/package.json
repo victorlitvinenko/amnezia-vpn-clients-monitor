@@ -1,5 +1,5 @@
 {
-  "name": "@awg-monitor/web",
+  "name": "@amnezia-vpn-monitor/web",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@awg-monitor/shared": "1.0.0",
+    "@amnezia-vpn-monitor/shared": "1.0.0",
     "@vitejs/plugin-react": "^6.1.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

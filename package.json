@@ -8,15 +8,15 @@
   ],
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n api,web -c cyan,magenta \"npm run dev -w @awg-monitor/api\" \"npm run dev -w @awg-monitor/web\"",
-    "build": "npm run build -w @awg-monitor/shared && npm run build -w @awg-monitor/api && npm run build -w @awg-monitor/web",
+    "dev": "concurrently -k -n api,web -c cyan,magenta \"npm run dev -w @amnezia-vpn-monitor/api\" \"npm run dev -w @amnezia-vpn-monitor/web\"",
+    "build": "npm run build -w @amnezia-vpn-monitor/shared && npm run build -w @amnezia-vpn-monitor/api && npm run build -w @amnezia-vpn-monitor/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "oxlint .",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "test": "npm run test --workspaces --if-present",
     "auth:password": "node -e \"console.log(require('node:crypto').randomBytes(24).toString('base64url'))\"",
-    "auth:hash": "npm run auth:hash -w @awg-monitor/api",
+    "auth:hash": "npm run auth:hash -w @amnezia-vpn-monitor/api",
     "auth:secret": "node -e \"console.log(require('node:crypto').randomBytes(32).toString('hex'))\""
   },
   "devDependencies": {

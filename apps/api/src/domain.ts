@@ -1,4 +1,4 @@
-import type { ClientStatus } from '@awg-monitor/shared';
+import type { ClientStatus } from '@amnezia-vpn-monitor/shared';
 import { z } from 'zod';
 
 export interface AwgPeer {

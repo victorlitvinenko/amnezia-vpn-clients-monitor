@@ -109,7 +109,7 @@ npm test
 ```bash
 npm install
 npm run build
-NODE_ENV=production npm run start -w @awg-monitor/api
+NODE_ENV=production npm run start -w @amnezia-vpn-monitor/api
 ```
 
 Обычно production-версию следует запускать через Docker Compose, чтобы корректно подключить Docker socket.
