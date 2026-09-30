@@ -75,7 +75,7 @@ It does not remove Docker, the Docker Compose plugin, or the AmneziaWG container
 
 Authentication is mandatory. On the first start, the dashboard displays a one-time page for creating the administrator password. The backend stores only its Argon2id hash and a random 32-byte session-signing secret in `auth.sqlite` within the `traffic-data` volume. The plaintext password is never stored or sent to the frontend build.
 
-The authenticated state and expiry are stored in an HMAC-SHA256 signed, `HttpOnly`, `SameSite=Strict` cookie. The cookie contains no password or sensitive VPN data. Complete the first-run setup through an HTTPS domain: the password itself is sent to the backend to create the hash.
+The authenticated state and expiry are stored in an HMAC-SHA256 signed, `HttpOnly`, `SameSite=Strict` cookie. The cookie contains no password or sensitive VPN data and works through both HTTP and HTTPS. Use HTTPS when the dashboard is reachable over an untrusted network: the password itself is sent to the backend during setup and sign-in.
 
 Until setup is complete, anyone who can reach the dashboard can claim the administrator password. Keep the dashboard private until you finish setup, or complete it immediately after deployment.
 
@@ -133,9 +133,9 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-Compose does not require a password hash or a session secret. After the first start, open the dashboard through its HTTPS domain and create the administrator password. You can change the host port through `HOST_PORT`, for example: `HOST_PORT=8081 docker compose up -d --build`. `PORT` controls the port that Fastify listens on inside the container, while `HOST_PORT` controls the host-side mapping. Both default to `8080`. The `amnezia-awg2` container is not part of this Compose project and remains managed separately.
+Compose does not require a password hash or a session secret. After the first start, open the dashboard and create the administrator password. You can change the host port through `HOST_PORT`, for example: `HOST_PORT=8081 docker compose up -d --build`. `PORT` controls the port that Fastify listens on inside the container, while `HOST_PORT` controls the host-side mapping. Both default to `8080`. The `amnezia-awg2` container is not part of this Compose project and remains managed separately.
 
-Production session cookies are always marked `Secure`; use the dashboard through an HTTPS domain. Direct plain-HTTP access to the published host port is suitable for `/api/health` diagnostics but cannot maintain a production login session.
+Production session cookies work over both HTTP and HTTPS. HTTPS is recommended when the dashboard is reachable over an untrusted network.
 
 Traffic counters, the password hash, and the session-signing secret are stored in the `traffic-data` named volume and survive normal container rebuilds and `docker compose down`. Running `docker compose down -v` deletes the accumulated statistics and resets the administrator password.
 

@@ -103,6 +103,18 @@ describe('API', () => {
     expect(logout.statusCode).toBe(204);
   });
 
+  it('allows the session cookie over plain HTTP', async () => {
+    app = await buildApp({ config, getClients: async () => [] });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { password: 'test-password' }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['set-cookie']).not.toContain('; Secure');
+  });
+
   it('returns the AmneziaWG container CPU load and uptime', async () => {
     app = await buildApp({
       config,

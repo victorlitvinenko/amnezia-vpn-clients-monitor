@@ -100,7 +100,7 @@ export async function buildApp({
   const sessionCookieOptions = {
     path: '/',
     httpOnly: true,
-    secure: production,
+    secure: false,
     sameSite: 'strict' as const
   };
   await app.register(cookie, {
