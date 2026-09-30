@@ -104,7 +104,10 @@ describe('API', () => {
   });
 
   it('allows the session cookie over plain HTTP', async () => {
-    app = await buildApp({ config, getClients: async () => [] });
+    app = await buildApp({
+      config: { ...config, nodeEnv: 'production' },
+      getClients: async () => []
+    });
     const response = await app.inject({
       method: 'POST',
       url: '/api/auth/login',
@@ -112,6 +115,7 @@ describe('API', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    expect(response.headers['set-cookie']).toMatch(/^amnezia-vpn-monitor-session=/);
     expect(response.headers['set-cookie']).not.toContain('; Secure');
   });
 

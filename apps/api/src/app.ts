@@ -51,7 +51,7 @@ const setupSchema = z.object({
   passwordConfirmation: z.string().min(1).max(1024)
 });
 
-const PRODUCTION_COOKIE_NAME = '__Host-awg-session';
+const PRODUCTION_COOKIE_NAME = 'amnezia-vpn-monitor-session';
 const DEVELOPMENT_COOKIE_NAME = 'awg-session';
 
 export async function buildApp({
