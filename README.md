@@ -61,6 +61,16 @@ docker compose up -d --build
 
 Set `AMNEZIA_CONTAINER` and `HOST_PORT` in `.env` before starting if their defaults do not match your host. Check the service with `docker compose ps` and `curl http://localhost:8080/api/health`.
 
+### Uninstallation
+
+The following command asks for confirmation and removes the dashboard container, its locally built image, installation directory, credentials, and traffic statistics:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/uninstall.sh | bash
+```
+
+It does not remove Docker, the Docker Compose plugin, or the AmneziaWG container. To remove an installation made in another directory, use `curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/uninstall.sh | INSTALL_DIR=/srv/amnezia-vpn-monitor bash`. Review [uninstall.sh](uninstall.sh) before running it.
+
 ## Authentication setup
 
 Authentication is mandatory. On the first start, the dashboard displays a one-time page for creating the administrator password. The backend stores only its Argon2id hash and a random 32-byte session-signing secret in `auth.sqlite` within the `traffic-data` volume. The plaintext password is never stored or sent to the frontend build.

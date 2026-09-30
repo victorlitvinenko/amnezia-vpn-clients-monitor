@@ -59,6 +59,16 @@ docker compose up -d --build
 
 Если стандартные значения не подходят, перед запуском задайте в `.env` `AMNEZIA_CONTAINER` и `HOST_PORT`. Проверьте сервис командами `docker compose ps` и `curl http://localhost:8080/api/health`.
 
+### Удаление
+
+Следующая команда запросит подтверждение и удалит контейнер панели, собранный локально образ, каталог установки, учётные данные и статистику трафика:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/uninstall.sh | bash
+```
+
+Docker, плагин Docker Compose и контейнер AmneziaWG скрипт не удаляет. Для панели, установленной в другом каталоге, используйте `curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/uninstall.sh | INSTALL_DIR=/srv/amnezia-vpn-monitor bash`. Перед выполнением ознакомьтесь с [uninstall.sh](uninstall.sh).
+
 ## Настройка авторизации
 
 Авторизация обязательна. При первом запуске панель показывает одноразовую страницу создания пароля администратора. Backend сохраняет только его Argon2id-хеш и случайный 32-байтовый ключ подписи сессий в `auth.sqlite` внутри volume `traffic-data`. Пароль в открытом виде не хранится и не попадает во frontend-сборку.
