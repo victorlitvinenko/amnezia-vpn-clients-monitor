@@ -42,6 +42,18 @@ The authenticated state and expiry are stored in an HMAC-SHA256 signed, `HttpOnl
 
 Until setup is complete, anyone who can reach the dashboard can claim the administrator password. Keep the dashboard private until you finish setup, or complete it immediately after deployment.
 
+### Password recovery
+
+If the administrator password is lost, a Docker-host owner can reset only the dashboard credentials without deleting traffic statistics. Stop the service, run the profile-only recovery service, then start the dashboard again:
+
+```bash
+docker compose stop vpn-dashboard
+docker compose run --rm password-reset
+docker compose up -d vpn-dashboard
+```
+
+The `password-reset` service belongs to the `tools` profile, so it never starts with ordinary `docker compose up`. Open the dashboard through HTTPS and complete first-run setup again. Do not run `docker compose down -v`: it also deletes `traffic.sqlite` and all accumulated traffic statistics.
+
 ## Local development
 
 ```bash

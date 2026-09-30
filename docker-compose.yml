@@ -37,5 +37,25 @@ services:
       retries: 3
       start_period: 10s
 
+  password-reset:
+    build: .
+    profiles: ['tools']
+    restart: 'no'
+    command:
+      [
+        'rm',
+        '-f',
+        '/app/data/auth.sqlite',
+        '/app/data/auth.sqlite-shm',
+        '/app/data/auth.sqlite-wal'
+      ]
+    volumes:
+      - traffic-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   traffic-data:
