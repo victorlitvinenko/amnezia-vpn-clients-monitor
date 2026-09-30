@@ -3,6 +3,8 @@
 set -Eeuo pipefail
 
 readonly INSTALL_DIR="${INSTALL_DIR:-/opt/amnezia-vpn-clients-monitor}"
+readonly UPDATE_SERVICE='amnezia-vpn-monitor-update.service'
+readonly UPDATE_TIMER='amnezia-vpn-monitor-update.timer'
 
 fail() {
   printf 'Error: %s\n' "$1" >&2
@@ -40,6 +42,19 @@ fi
 
 cd "$INSTALL_DIR"
 "${docker_command[@]}" compose down --volumes --rmi local --remove-orphans
+
+if command -v systemctl >/dev/null 2>&1; then
+  if [[ "$(id -u)" -eq 0 ]]; then
+    systemctl disable --now "$UPDATE_TIMER" >/dev/null 2>&1 || true
+    rm -f "/etc/systemd/system/$UPDATE_SERVICE" "/etc/systemd/system/$UPDATE_TIMER"
+    systemctl daemon-reload >/dev/null 2>&1 || true
+  else
+    command -v sudo >/dev/null 2>&1 || fail 'sudo is required to remove the automatic update task.'
+    sudo systemctl disable --now "$UPDATE_TIMER" >/dev/null 2>&1 || true
+    sudo rm -f "/etc/systemd/system/$UPDATE_SERVICE" "/etc/systemd/system/$UPDATE_TIMER"
+    sudo systemctl daemon-reload >/dev/null 2>&1 || true
+  fi
+fi
 
 if [[ "$(id -u)" -eq 0 ]]; then
   rm -rf -- "$INSTALL_DIR"

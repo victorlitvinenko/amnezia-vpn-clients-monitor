@@ -46,7 +46,7 @@ Run this command from a Linux terminal:
 curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/install.sh | bash
 ```
 
-The installer asks for the AmneziaWG container name and dashboard port, checks Docker and Docker Compose, and offers to install Docker Engine or the Docker Compose plugin when either is missing. It installs the dashboard in `/opt/amnezia-vpn-clients-monitor`, starts it, and checks `/api/health`. To use another installation directory or source archive, set `INSTALL_DIR` or `REPOSITORY_ARCHIVE_URL` before running the script.
+The installer asks for the AmneziaWG container name and dashboard port, checks Docker and Docker Compose, and offers to install Docker Engine or the Docker Compose plugin when either is missing. It installs the dashboard in `/opt/amnezia-vpn-clients-monitor`, starts it, checks `/api/health`, and enables daily automatic updates. To use another installation directory or source archive, set `INSTALL_DIR` or `REPOSITORY_ARCHIVE_URL` before running the script.
 
 The script downloads the current `main` branch. Review [install.sh](install.sh) before running it, especially on a production server.
 
@@ -71,6 +71,18 @@ curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-client
 
 It does not remove Docker, the Docker Compose plugin, or the AmneziaWG container. To remove an installation made in another directory, use `curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/uninstall.sh | INSTALL_DIR=/srv/amnezia-vpn-monitor bash`. Review [uninstall.sh](uninstall.sh) before running it.
 
+### Automatic updates
+
+The installer enables the `amnezia-vpn-monitor-update.timer` systemd timer by default. It runs [update.sh](update.sh) once daily at a random time between 00:00 and 03:00 in the server's local time. The updater downloads the current `main` branch, preserves `.env`, and skips rebuilding or restarting the dashboard when the downloaded archive matches the installed version.
+
+Check its status with `sudo systemctl status amnezia-vpn-monitor-update.timer`, run an update immediately with `sudo systemctl start amnezia-vpn-monitor-update.service`, and read its output with `sudo journalctl -u amnezia-vpn-monitor-update.service`.
+
+To disable automatic updates, run `sudo /opt/amnezia-vpn-clients-monitor/update.sh --disable-auto-update`. Existing installations can download the updater, update the dashboard, and enable the timer in one step:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/update.sh | bash -s -- --setup-auto-update
+```
+
 ## Authentication setup
 
 Authentication is mandatory. On the first start, the dashboard displays a one-time page for creating the administrator password. The backend stores only its Argon2id hash and a random 32-byte session-signing secret in `auth.sqlite` within the `traffic-data` volume. The plaintext password is never stored or sent to the frontend build.
@@ -89,7 +101,7 @@ docker compose run --rm password-reset
 docker compose up -d vpn-dashboard
 ```
 
-The `password-reset` service belongs to the `tools` profile, so it never starts with ordinary `docker compose up`. Open the dashboard through HTTPS and complete first-run setup again. Do not run `docker compose down -v`: it also deletes `traffic.sqlite` and all accumulated traffic statistics.
+The `password-reset` service belongs to the `tools` profile, so it never starts with ordinary `docker compose up`. Open the dashboard and complete first-run setup again. Do not run `docker compose down -v`: it also deletes `traffic.sqlite` and all accumulated traffic statistics.
 
 ## Local development
 

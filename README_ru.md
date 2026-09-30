@@ -44,7 +44,7 @@ Backend в фоне опрашивает счётчики AWG. При перво
 curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/install.sh | bash
 ```
 
-Установщик запросит имя контейнера AmneziaWG и порт панели, проверит Docker и Docker Compose, а при отсутствии Docker или плагина Docker Compose предложит их установить. Он установит панель в `/opt/amnezia-vpn-clients-monitor`, запустит её и проверит `/api/health`. Чтобы задать другой каталог или адрес архива, перед запуском скрипта установите `INSTALL_DIR` или `REPOSITORY_ARCHIVE_URL`.
+Установщик запросит имя контейнера AmneziaWG и порт панели, проверит Docker и Docker Compose, а при отсутствии Docker или плагина Docker Compose предложит их установить. Он установит панель в `/opt/amnezia-vpn-clients-monitor`, запустит её, проверит `/api/health` и включит ежедневное автообновление. Чтобы задать другой каталог или адрес архива, перед запуском скрипта установите `INSTALL_DIR` или `REPOSITORY_ARCHIVE_URL`.
 
 Скрипт скачивает текущее содержимое ветки `main`. Перед запуском на production-сервере ознакомьтесь с [install.sh](install.sh).
 
@@ -69,6 +69,18 @@ curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-client
 
 Docker, плагин Docker Compose и контейнер AmneziaWG скрипт не удаляет. Для панели, установленной в другом каталоге, используйте `curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/uninstall.sh | INSTALL_DIR=/srv/amnezia-vpn-monitor bash`. Перед выполнением ознакомьтесь с [uninstall.sh](uninstall.sh).
 
+### Автоматическое обновление
+
+Установщик по умолчанию включает systemd-таймер `amnezia-vpn-monitor-update.timer`. Он раз в сутки в случайный момент с 00:00 до 03:00 по локальному времени сервера запускает [update.sh](update.sh). Скрипт скачивает текущее содержимое ветки `main`, сохраняет `.env` и не пересобирает или перезапускает панель, если скачанный архив совпадает с установленной версией.
+
+Проверьте его состояние командой `sudo systemctl status amnezia-vpn-monitor-update.timer`, запустите обновление немедленно командой `sudo systemctl start amnezia-vpn-monitor-update.service`, а вывод смотрите через `sudo journalctl -u amnezia-vpn-monitor-update.service`.
+
+Чтобы отключить автообновление, выполните `sudo /opt/amnezia-vpn-clients-monitor/update.sh --disable-auto-update`. Для уже установленной панели можно одним действием скачать обновляющий скрипт, обновить панель и включить таймер:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/update.sh | bash -s -- --setup-auto-update
+```
+
 ## Настройка авторизации
 
 Авторизация обязательна. При первом запуске панель показывает одноразовую страницу создания пароля администратора. Backend сохраняет только его Argon2id-хеш и случайный 32-байтовый ключ подписи сессий в `auth.sqlite` внутри volume `traffic-data`. Пароль в открытом виде не хранится и не попадает во frontend-сборку.
@@ -87,7 +99,7 @@ docker compose run --rm password-reset
 docker compose up -d vpn-dashboard
 ```
 
-Сервис `password-reset` относится к профилю `tools`, поэтому он никогда не запускается при обычном `docker compose up`. Откройте панель через HTTPS и снова выполните первичную настройку. Не используйте `docker compose down -v`: команда также удаляет `traffic.sqlite` и всю накопленную статистику трафика.
+Сервис `password-reset` относится к профилю `tools`, поэтому он никогда не запускается при обычном `docker compose up`. Откройте панель и снова выполните первичную настройку. Не используйте `docker compose down -v`: команда также удаляет `traffic.sqlite` и всю накопленную статистику трафика.
 
 ## Локальная разработка
 

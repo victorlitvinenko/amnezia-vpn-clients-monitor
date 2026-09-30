@@ -90,6 +90,7 @@ if [[ "$(uname -s)" != 'Linux' ]]; then
 fi
 
 require_command curl
+require_command sha256sum
 require_command tar
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -128,14 +129,18 @@ tar -tzf "$temporary_directory/project.tar.gz" >/dev/null
 if [[ "$(id -u)" -eq 0 ]]; then
   mkdir -p "$INSTALL_DIR"
   tar -xzf "$temporary_directory/project.tar.gz" --strip-components=1 -C "$INSTALL_DIR"
+  sha256sum "$temporary_directory/project.tar.gz" | cut -d ' ' -f 1 >"$INSTALL_DIR/.amnezia-vpn-monitor-update.sha256"
   cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
+  chmod 755 "$INSTALL_DIR/update.sh"
   chmod 600 "$INSTALL_DIR/.env"
   sed -i "s|^HOST_PORT=.*|HOST_PORT=$host_port|; s|^AMNEZIA_CONTAINER=.*|AMNEZIA_CONTAINER=$container_name|" "$INSTALL_DIR/.env"
 else
   require_command sudo
   sudo mkdir -p "$INSTALL_DIR"
   sudo tar -xzf "$temporary_directory/project.tar.gz" --strip-components=1 -C "$INSTALL_DIR"
+  sha256sum "$temporary_directory/project.tar.gz" | cut -d ' ' -f 1 | sudo tee "$INSTALL_DIR/.amnezia-vpn-monitor-update.sha256" >/dev/null
   sudo cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
+  sudo chmod 755 "$INSTALL_DIR/update.sh"
   sudo chmod 600 "$INSTALL_DIR/.env"
   sudo sed -i "s|^HOST_PORT=.*|HOST_PORT=$host_port|; s|^AMNEZIA_CONTAINER=.*|AMNEZIA_CONTAINER=$container_name|" "$INSTALL_DIR/.env"
 fi
@@ -145,7 +150,8 @@ cd "$INSTALL_DIR"
 
 for _ in {1..20}; do
   if curl --fail --silent "http://127.0.0.1:$host_port/api/health" >/dev/null; then
-    printf '\nDashboard is running. Configure an HTTPS domain, then open it and create the administrator password.\n'
+    "$INSTALL_DIR/update.sh" --enable-auto-update
+    printf '\nDashboard is running. Daily automatic updates are enabled. Open it and create the administrator password.\n'
     exit 0
   fi
   sleep 2
