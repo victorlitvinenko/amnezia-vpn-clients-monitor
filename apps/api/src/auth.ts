@@ -1,11 +1,26 @@
-import { verify } from 'argon2';
+import { argon2id, hash, verify } from 'argon2';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-const PUBLIC_API_ROUTES = new Set(['/api/health', '/api/auth/login', '/api/auth/session']);
+const PUBLIC_API_ROUTES = new Set([
+  '/api/health',
+  '/api/auth/login',
+  '/api/auth/session',
+  '/api/auth/setup'
+]);
 
-export async function verifyPassword(hash: string, password: string): Promise<boolean> {
+export async function hashPassword(password: string): Promise<string> {
+  return hash(password, {
+    type: argon2id,
+    memoryCost: 65_536,
+    timeCost: 3,
+    parallelism: 4,
+    hashLength: 32
+  });
+}
+
+export async function verifyPassword(encodedHash: string, password: string): Promise<boolean> {
   try {
-    return await verify(hash, password);
+    return await verify(encodedHash, password);
   } catch {
     return false;
   }
@@ -48,13 +63,18 @@ export function isAuthenticated(request: FastifyRequest, cookieName: string): bo
   }
 }
 
-export function createAuthenticationHook(cookieName: string) {
+export function createAuthenticationHook(cookieName: string, isConfigured: () => boolean) {
   return async function requireAuthentication(
     request: FastifyRequest,
     reply: FastifyReply
   ): Promise<void> {
     const path = request.url.split('?', 1)[0] ?? request.url;
     if (!path.startsWith('/api/') || PUBLIC_API_ROUTES.has(path)) return;
+
+    if (!isConfigured()) {
+      await reply.code(401).send({ error: 'Setup required' });
+      return;
+    }
 
     if (!isAuthenticated(request, cookieName)) {
       await reply.code(401).send({ error: 'Authentication required' });

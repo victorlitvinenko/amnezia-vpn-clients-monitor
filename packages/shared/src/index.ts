@@ -19,10 +19,16 @@ export interface ApiError {
 
 export interface AuthStatus {
   authenticated: boolean;
+  setupRequired: boolean;
 }
 
 export interface LoginRequest {
   password: string;
+}
+
+export interface SetupRequest {
+  password: string;
+  passwordConfirmation: string;
 }
 
 export interface HealthResponse {

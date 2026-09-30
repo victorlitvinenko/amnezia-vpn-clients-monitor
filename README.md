@@ -1,4 +1,4 @@
-# AmneziaWG Clients Monitor
+# AmneziaVPN Clients Monitor
 
 A minimal read-only administrative dashboard that displays a current snapshot of clients from an existing AmneziaWG container. The application does not modify the VPN configuration or manage containers.
 
@@ -36,53 +36,22 @@ The backend samples AWG counters in the background. Current counters are used as
 
 ## Authentication setup
 
-Authentication is mandatory. Fastify verifies one shared dashboard password against an Argon2id hash and stores the authenticated state and expiry time in an HMAC-SHA256 signed, `HttpOnly`, `SameSite=Strict` cookie. The cookie contains no password or sensitive VPN data. The plaintext password is never stored or sent to the frontend build.
+Authentication is mandatory. On the first start, the dashboard displays a one-time page for creating the administrator password. The backend stores only its Argon2id hash and a random 32-byte session-signing secret in `auth.sqlite` within the `traffic-data` volume. The plaintext password is never stored or sent to the frontend build.
 
-Install dependencies. You may generate a strong random dashboard password, then create its Argon2id hash interactively and generate a separate 32-byte session secret:
+The authenticated state and expiry are stored in an HMAC-SHA256 signed, `HttpOnly`, `SameSite=Strict` cookie. The cookie contains no password or sensitive VPN data. Complete the first-run setup through an HTTPS domain: the password itself is sent to the backend to create the hash.
 
-```bash
-npm install
-npm run auth:password
-npm run auth:hash
-npm run auth:secret
-```
-
-Store the output of `npm run auth:password` in a password manager. `npm run auth:hash` prompts for that password twice without displaying it; copy the resulting `$argon2id$...` line and the output of `npm run auth:secret` into `.env`:
-
-```dotenv
-AUTH_PASSWORD_HASH='$argon2id$v=19$...'
-SESSION_SECRET=64-hexadecimal-characters
-SESSION_TTL_SECONDS=86400
-```
-
-Keep the single quotes around `AUTH_PASSWORD_HASH`: they prevent Docker Compose from interpreting the `$` characters. Never commit the populated `.env` file. Changing `SESSION_SECRET` invalidates all existing sessions. Changing the password hash takes effect after the application is restarted.
-
-Alternative session-secret generators:
-
-```bash
-openssl rand -hex 32
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-```
-
-Alternative random-password generators:
-
-```bash
-openssl rand -base64 24
-node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))"
-```
+Until setup is complete, anyone who can reach the dashboard can claim the administrator password. Keep the dashboard private until you finish setup, or complete it immediately after deployment.
 
 ## Local development
 
 ```bash
 npm install
-export AUTH_PASSWORD_HASH='$argon2id$v=19$...'
-export SESSION_SECRET='64-hexadecimal-characters'
 npm run dev
 ```
 
 Vite starts at `http://localhost:5173` and proxies `/api` to Fastify at `http://localhost:8080`. The local API process must have access to `/var/run/docker.sock`.
 
-Local traffic state is stored in `./data/traffic.sqlite`, which is ignored by Git.
+Local traffic state and first-run credentials are stored in `./data/traffic.sqlite` and `./data/auth.sqlite`, which are ignored by Git.
 
 Available checks:
 
@@ -115,11 +84,11 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-Compose reads the authentication values from `.env` and publishes the application on host port `8080` by default. You can change the host port through `HOST_PORT`, for example: `HOST_PORT=8081 docker compose up -d --build`. `PORT` controls the port that Fastify listens on inside the container, while `HOST_PORT` controls the host-side mapping. Both default to `8080`. The `amnezia-awg2` container is not part of this Compose project and remains managed separately.
+Compose does not require a password hash or a session secret. After the first start, open the dashboard through its HTTPS domain and create the administrator password. You can change the host port through `HOST_PORT`, for example: `HOST_PORT=8081 docker compose up -d --build`. `PORT` controls the port that Fastify listens on inside the container, while `HOST_PORT` controls the host-side mapping. Both default to `8080`. The `amnezia-awg2` container is not part of this Compose project and remains managed separately.
 
 Production session cookies are always marked `Secure`; use the dashboard through an HTTPS domain. Direct plain-HTTP access to the published host port is suitable for `/api/health` diagnostics but cannot maintain a production login session.
 
-Traffic counters are stored in the `traffic-data` named volume and survive normal container rebuilds and `docker compose down`. Running `docker compose down -v` deletes the accumulated statistics.
+Traffic counters, the password hash, and the session-signing secret are stored in the `traffic-data` named volume and survive normal container rebuilds and `docker compose down`. Running `docker compose down -v` deletes the accumulated statistics and resets the administrator password.
 
 To stop the application:
 
@@ -133,8 +102,6 @@ docker compose down
 | ---------------------------- | ----------------------: | ----------------------------------------------------------------------- |
 | `PORT`                       |                  `8080` | Internal Fastify HTTP port                                              |
 | `HOST_PORT`                  |                  `8080` | Docker host port published by Compose                                   |
-| `AUTH_PASSWORD_HASH`         |              _required_ | Encoded Argon2id hash of the shared dashboard password                  |
-| `SESSION_SECRET`             |              _required_ | Session signing key: exactly 32 bytes encoded as 64 hex characters      |
 | `SESSION_TTL_SECONDS`        |                 `86400` | Authenticated session lifetime in seconds                               |
 | `AMNEZIA_CONTAINER`          |          `amnezia-awg2` | Name of the existing container                                          |
 | `AMNEZIA_INTERFACE`          |                  `awg0` | AWG interface name                                                      |
@@ -150,14 +117,15 @@ See `.env.example` for an example configuration. Do not expose these values thro
 ## API
 
 - `GET /api/health` checks the HTTP application;
-- `GET /api/auth/session` reports whether the current signed session is authenticated;
+- `GET /api/auth/session` reports authentication and whether first-run setup is required;
+- `POST /api/auth/setup` creates the administrator password exactly once;
 - `POST /api/auth/login` verifies the password and creates a session;
 - `POST /api/auth/logout` deletes the current session;
 - `GET /api/dashboard` returns clients and container statistics from one consistent traffic snapshot;
 - `GET /api/clients` returns the current merged client snapshot with daily and monthly download totals.
 - `GET /api/stats` returns container CPU load and uptime, current download/upload rates, and aggregate traffic for the current day.
 
-All API routes except health, login, and session-status checks require a valid session and otherwise return `401`. Login attempts are limited to five per minute. The dashboard refreshes its consistent combined snapshot every 5 seconds. If the socket, container, command, or source data is unavailable, `/api/dashboard`, `/api/clients`, and `/api/stats` respond with status `503` and safe JSON without a stack trace. `/api/health` checks only whether the dashboard itself is ready and does not contact AmneziaWG.
+All API routes except health, setup, login, and session-status checks require a valid session and otherwise return `401`. Setup and login attempts are each limited to five per minute. The dashboard refreshes its consistent combined snapshot every 5 seconds. If the socket, container, command, or source data is unavailable, `/api/dashboard`, `/api/clients`, and `/api/stats` respond with status `503` and safe JSON without a stack trace. `/api/health` checks only whether the dashboard itself is ready and does not contact AmneziaWG.
 
 ## Docker socket security
 

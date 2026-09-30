@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -14,9 +18,9 @@ const config: AppConfig = {
   trafficDbPath: ':memory:',
   timeZone: 'Europe/Moscow',
   nodeEnv: 'test',
-  authPasswordHash:
+  initialAuthPasswordHash:
     '$argon2id$v=19$m=65536,p=4,t=3$DMq1d2uUTT+Yq+c/+iz67g$FiF/rQcgJPb/orLNaxC0/C69j/qGannXd4cpVyAp5o8',
-  sessionSecret: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  initialSessionSecret: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   sessionTtlSeconds: 86_400
 };
 
@@ -89,7 +93,7 @@ describe('API', () => {
       url: '/api/auth/session',
       headers: { cookie }
     });
-    expect(session.json()).toEqual({ authenticated: true });
+    expect(session.json()).toEqual({ authenticated: true, setupRequired: false });
 
     const logout = await app.inject({
       method: 'POST',
@@ -194,5 +198,92 @@ describe('API', () => {
     });
     expect(response.statusCode).toBe(503);
     expect(response.json()).toEqual({ error: 'Unable to read AmneziaWG state' });
+  });
+
+  it('creates credentials during first-run setup and authenticates the new session', async () => {
+    const freshConfig: AppConfig = {
+      ...config,
+      initialAuthPasswordHash: undefined,
+      initialSessionSecret: undefined
+    };
+    app = await buildApp({ config: freshConfig, getClients: async () => [] });
+
+    const initialStatus = await app.inject({ method: 'GET', url: '/api/auth/session' });
+    expect(initialStatus.json()).toEqual({ authenticated: false, setupRequired: true });
+
+    const setup = await app.inject({
+      method: 'POST',
+      url: '/api/auth/setup',
+      payload: { password: 'new-password', passwordConfirmation: 'new-password' }
+    });
+    expect(setup.statusCode).toBe(200);
+    expect(setup.json()).toEqual({ authenticated: true, setupRequired: false });
+    const setCookie = setup.headers['set-cookie'];
+    if (typeof setCookie !== 'string') throw new Error('Setup did not return a session cookie');
+    const cookie = setCookie.split(';', 1)[0];
+
+    const session = await app.inject({
+      method: 'GET',
+      url: '/api/auth/session',
+      headers: { cookie }
+    });
+    expect(session.json()).toEqual({ authenticated: true, setupRequired: false });
+
+    const repeatSetup = await app.inject({
+      method: 'POST',
+      url: '/api/auth/setup',
+      payload: { password: 'other-password', passwordConfirmation: 'other-password' }
+    });
+    expect(repeatSetup.statusCode).toBe(409);
+    expect(repeatSetup.json()).toEqual({ error: 'Setup has already been completed' });
+  });
+
+  it('rejects first-run setup when passwords differ', async () => {
+    const freshConfig: AppConfig = {
+      ...config,
+      initialAuthPasswordHash: undefined,
+      initialSessionSecret: undefined
+    };
+    app = await buildApp({ config: freshConfig, getClients: async () => [] });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/auth/setup',
+      payload: { password: 'new-password', passwordConfirmation: 'different-password' }
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'Passwords do not match' });
+  });
+
+  it('keeps first-run credentials after an application restart', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'awg-monitor-auth-'));
+    const freshConfig: AppConfig = {
+      ...config,
+      trafficDbPath: join(directory, 'traffic.sqlite'),
+      initialAuthPasswordHash: undefined,
+      initialSessionSecret: undefined
+    };
+    try {
+      app = await buildApp({ config: freshConfig, getClients: async () => [] });
+      const setup = await app.inject({
+        method: 'POST',
+        url: '/api/auth/setup',
+        payload: { password: 'persisted-password', passwordConfirmation: 'persisted-password' }
+      });
+      expect(setup.statusCode).toBe(200);
+      await app.close();
+      app = undefined;
+
+      app = await buildApp({ config: freshConfig, getClients: async () => [] });
+      const login = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { password: 'persisted-password' }
+      });
+      expect(login.statusCode).toBe(200);
+    } finally {
+      await app?.close();
+      app = undefined;
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });

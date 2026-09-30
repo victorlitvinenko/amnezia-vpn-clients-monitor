@@ -13,12 +13,12 @@ describe('configuration', () => {
       ...requiredEnvironment,
       SESSION_TTL_SECONDS: '3600'
     });
-    expect(config.authPasswordHash).toBe(requiredEnvironment.AUTH_PASSWORD_HASH);
-    expect(config.sessionSecret).toBe(requiredEnvironment.SESSION_SECRET);
+    expect(config.initialAuthPasswordHash).toBe(requiredEnvironment.AUTH_PASSWORD_HASH);
+    expect(config.initialSessionSecret).toBe(requiredEnvironment.SESSION_SECRET);
     expect(config.sessionTtlSeconds).toBe(3600);
   });
 
-  it('requires an Argon2id password hash', () => {
+  it('validates an optional Argon2id password hash', () => {
     expect(() =>
       readConfig({
         ...requiredEnvironment,
@@ -27,9 +27,15 @@ describe('configuration', () => {
     ).toThrow('AUTH_PASSWORD_HASH');
   });
 
-  it('requires a 32-byte hexadecimal session secret', () => {
+  it('validates an optional 32-byte hexadecimal session secret', () => {
     expect(() => readConfig({ ...requiredEnvironment, SESSION_SECRET: 'too-short' })).toThrow(
       'SESSION_SECRET'
     );
+  });
+
+  it('allows authentication to be configured during first-run setup', () => {
+    const config = readConfig({});
+    expect(config.initialAuthPasswordHash).toBeUndefined();
+    expect(config.initialSessionSecret).toBeUndefined();
   });
 });

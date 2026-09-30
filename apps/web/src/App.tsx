@@ -127,11 +127,13 @@ async function fetchAuthStatus(signal?: AbortSignal): Promise<AuthStatus> {
     typeof body !== 'object' ||
     body === null ||
     !('authenticated' in body) ||
-    typeof body.authenticated !== 'boolean'
+    typeof body.authenticated !== 'boolean' ||
+    !('setupRequired' in body) ||
+    typeof body.setupRequired !== 'boolean'
   ) {
     throw new Error('Invalid authentication response');
   }
-  return { authenticated: body.authenticated };
+  return { authenticated: body.authenticated, setupRequired: body.setupRequired };
 }
 
 async function login(password: string): Promise<void> {
@@ -148,6 +150,22 @@ async function login(password: string): Promise<void> {
     if (response.status === 401) throw new Error('Invalid password');
     if (response.status === 429) throw new Error('Too many attempts. Try again later.');
     throw new Error('Unable to sign in');
+  }
+}
+
+async function setup(password: string, passwordConfirmation: string): Promise<void> {
+  const response = await fetch('/api/auth/setup', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ password, passwordConfirmation })
+  });
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
+    if (response.status === 429) throw new Error('Too many attempts. Try again later.');
+    throw new Error(apiErrorMessage(body) ?? 'Unable to complete setup');
   }
 }
 
@@ -412,7 +430,76 @@ function Login({ initialError, onAuthenticated }: LoginProps) {
   );
 }
 
-type AuthenticationState = 'checking' | 'authenticated' | 'anonymous';
+interface SetupProps {
+  onConfigured: () => void;
+}
+
+function Setup({ onConfigured }: SetupProps) {
+  const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      await setup(password, passwordConfirmation);
+      setPassword('');
+      setPasswordConfirmation('');
+      onConfigured();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to complete setup');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="login-shell">
+      <section className="login-card" aria-labelledby="setup-title">
+        <p className="eyebrow">VPN STATUS</p>
+        <h1 id="setup-title">AmneziaVPN</h1>
+        <p className="login-description">Create the administrator password to finish setup.</p>
+        <form className="login-form" onSubmit={(event) => void handleSubmit(event)}>
+          <label htmlFor="setup-password">Password</label>
+          <input
+            id="setup-password"
+            name="password"
+            type="password"
+            value={password}
+            autoComplete="new-password"
+            required
+            maxLength={1024}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <label htmlFor="setup-password-confirmation">Confirm password</label>
+          <input
+            id="setup-password-confirmation"
+            name="passwordConfirmation"
+            type="password"
+            value={passwordConfirmation}
+            autoComplete="new-password"
+            required
+            maxLength={1024}
+            onChange={(event) => setPasswordConfirmation(event.target.value)}
+          />
+          {error && (
+            <p className="login-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button type="submit" disabled={submitting}>
+            {submitting ? 'Saving…' : 'Save password'}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+type AuthenticationState = 'checking' | 'authenticated' | 'anonymous' | 'setup';
 
 export function App() {
   const [authentication, setAuthentication] = useState<AuthenticationState>('checking');
@@ -421,7 +508,11 @@ export function App() {
   useEffect(() => {
     const controller = new AbortController();
     void fetchAuthStatus(controller.signal)
-      .then((status) => setAuthentication(status.authenticated ? 'authenticated' : 'anonymous'))
+      .then((status) =>
+        setAuthentication(
+          status.setupRequired ? 'setup' : status.authenticated ? 'authenticated' : 'anonymous'
+        )
+      )
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
         setAuthenticationError('Unable to reach the server');
@@ -453,6 +544,10 @@ export function App() {
         }}
       />
     );
+  }
+
+  if (authentication === 'setup') {
+    return <Setup onConfigured={() => setAuthentication('authenticated')} />;
   }
 
   return (

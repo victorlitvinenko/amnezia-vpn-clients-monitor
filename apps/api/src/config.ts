@@ -8,8 +8,8 @@ export interface AppConfig {
   trafficDbPath: string;
   timeZone: string;
   nodeEnv: string;
-  authPasswordHash: string;
-  sessionSecret: string;
+  initialAuthPasswordHash: string | undefined;
+  initialSessionSecret: string | undefined;
   sessionTtlSeconds: number;
 }
 
@@ -29,7 +29,8 @@ function validTimeZone(value: string | undefined): string {
   }
 }
 
-function requiredArgon2idHash(value: string | undefined): string {
+function optionalArgon2idHash(value: string | undefined): string | undefined {
+  if (value === undefined || value === '') return undefined;
   const encodedHashPattern =
     /^\$argon2id\$v=\d+\$m=\d+,(?:t=\d+,p=\d+|p=\d+,t=\d+)\$[A-Za-z0-9+/]+={0,2}\$[A-Za-z0-9+/]+={0,2}$/;
   if (!value || !encodedHashPattern.test(value)) {
@@ -38,7 +39,8 @@ function requiredArgon2idHash(value: string | undefined): string {
   return value;
 }
 
-function requiredSessionSecret(value: string | undefined): string {
+function optionalSessionSecret(value: string | undefined): string | undefined {
+  if (value === undefined || value === '') return undefined;
   if (!value || !/^[0-9a-fA-F]{64}$/.test(value)) {
     throw new Error(
       'SESSION_SECRET must contain exactly 32 bytes encoded as 64 hexadecimal characters'
@@ -58,8 +60,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     trafficDbPath: env.TRAFFIC_DB_PATH || './data/traffic.sqlite',
     timeZone: validTimeZone(env.TZ),
     nodeEnv: env.NODE_ENV || 'development',
-    authPasswordHash: requiredArgon2idHash(env.AUTH_PASSWORD_HASH),
-    sessionSecret: requiredSessionSecret(env.SESSION_SECRET),
+    initialAuthPasswordHash: optionalArgon2idHash(env.AUTH_PASSWORD_HASH),
+    initialSessionSecret: optionalSessionSecret(env.SESSION_SECRET),
     sessionTtlSeconds: positiveInteger(env.SESSION_TTL_SECONDS, 86_400)
   };
 }

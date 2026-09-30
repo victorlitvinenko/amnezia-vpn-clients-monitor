@@ -6,12 +6,6 @@ services:
       NODE_ENV: production
       PORT: ${PORT:-8080}
 
-      # Default login password: admin
-      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-$argon2id$v=19$m=65536,p=4,t=3$WmT0YM7DuwqPUGPI37tuYw$9xQaTotiOCjbYTqzAhtxgrFCsP6evevbxGqyHo2XEUc}
-
-      # Change in production
-      SESSION_SECRET: ${SESSION_SECRET:-f94d24135008ac54149fe6c7b8f5283fbea4454b9050bda9034c3a1712eccd31}
-
       SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-86400}
       AMNEZIA_CONTAINER: ${AMNEZIA_CONTAINER:-amnezia-awg2}
       AMNEZIA_INTERFACE: ${AMNEZIA_INTERFACE:-awg0}
