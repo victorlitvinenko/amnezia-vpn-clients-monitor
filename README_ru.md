@@ -32,6 +32,33 @@ Backend в фоне опрашивает счётчики AWG. При перво
 - уже работающий контейнер AmneziaWG, по умолчанию `amnezia-awg2`;
 - доступ к `/var/run/docker.sock` на Docker-host.
 
+## Установка
+
+Для работы панели нужен уже запущенный контейнер AmneziaWG. Скрипт не устанавливает и не управляет самой VPN.
+
+### Одна команда
+
+Выполните команду в терминале Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/install.sh | bash
+```
+
+Установщик запросит имя контейнера AmneziaWG и порт панели, проверит Docker и Docker Compose, а при отсутствии Docker предложит установить Docker Engine. Он установит панель в `/opt/amnezia-vpn-clients-monitor`, запустит её и проверит `/api/health`. Чтобы задать другой каталог или адрес архива, перед запуском скрипта установите `INSTALL_DIR` или `REPOSITORY_ARCHIVE_URL`.
+
+Скрипт скачивает текущее содержимое ветки `main`. Перед запуском на production-сервере ознакомьтесь с [install.sh](install.sh).
+
+### Установка вручную
+
+```bash
+git clone https://github.com/victorlitvinenko/amnezia-vpn-clients-monitor.git
+cd amnezia-vpn-clients-monitor
+cp .env.example .env
+docker compose up -d --build
+```
+
+Если стандартные значения не подходят, перед запуском задайте в `.env` `AMNEZIA_CONTAINER` и `HOST_PORT`. Проверьте сервис командами `docker compose ps` и `curl http://localhost:8080/api/health`.
+
 ## Настройка авторизации
 
 Авторизация обязательна. При первом запуске панель показывает одноразовую страницу создания пароля администратора. Backend сохраняет только его Argon2id-хеш и случайный 32-байтовый ключ подписи сессий в `auth.sqlite` внутри volume `traffic-data`. Пароль в открытом виде не хранится и не попадает во frontend-сборку.

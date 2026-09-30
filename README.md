@@ -34,6 +34,33 @@ The backend samples AWG counters in the background. Current counters are used as
 - an existing AmneziaWG container, named `amnezia-awg2` by default;
 - access to `/var/run/docker.sock` on the Docker host.
 
+## Installation
+
+The dashboard needs an existing, running AmneziaWG container. It does not install or manage the VPN itself.
+
+### One command
+
+Run this command from a Linux terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/install.sh | bash
+```
+
+The installer asks for the AmneziaWG container name and dashboard port, checks Docker and Docker Compose, and offers to install Docker Engine when it is missing. It installs the dashboard in `/opt/amnezia-vpn-clients-monitor`, starts it, and checks `/api/health`. To use another installation directory or source archive, set `INSTALL_DIR` or `REPOSITORY_ARCHIVE_URL` before running the script.
+
+The script downloads the current `main` branch. Review [install.sh](install.sh) before running it, especially on a production server.
+
+### Manual installation
+
+```bash
+git clone https://github.com/victorlitvinenko/amnezia-vpn-clients-monitor.git
+cd amnezia-vpn-clients-monitor
+cp .env.example .env
+docker compose up -d --build
+```
+
+Set `AMNEZIA_CONTAINER` and `HOST_PORT` in `.env` before starting if their defaults do not match your host. Check the service with `docker compose ps` and `curl http://localhost:8080/api/health`.
+
 ## Authentication setup
 
 Authentication is mandatory. On the first start, the dashboard displays a one-time page for creating the administrator password. The backend stores only its Argon2id hash and a random 32-byte session-signing secret in `auth.sqlite` within the `traffic-data` volume. The plaintext password is never stored or sent to the frontend build.
