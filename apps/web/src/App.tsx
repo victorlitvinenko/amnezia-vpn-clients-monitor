@@ -175,11 +175,15 @@ function ClientRow({ client }: ClientRowProps) {
       </div>
       <div className="period-traffic traffic-today" aria-label="Download today">
         <span className="mobile-label">↓ Today</span>
-        <strong>{formatTrafficBytes(client.downloadTodayBytes)}</strong>
+        <strong>
+          {client.downloadTodayBytes > 0 ? formatTrafficBytes(client.downloadTodayBytes) : null}
+        </strong>
       </div>
       <div className="period-traffic traffic-month" aria-label="Download this month">
         <span className="mobile-label">↓ Month</span>
-        <strong>{formatTrafficBytes(client.downloadMonthBytes)}</strong>
+        <strong>
+          {client.downloadMonthBytes > 0 ? formatTrafficBytes(client.downloadMonthBytes) : null}
+        </strong>
       </div>
       <div
         className="client-throughput"
