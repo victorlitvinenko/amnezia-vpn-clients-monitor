@@ -44,7 +44,7 @@ Backend в фоне опрашивает счётчики AWG. При перво
 curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/install.sh | bash
 ```
 
-Установщик запросит имя контейнера AmneziaWG и порт панели, проверит Docker и Docker Compose, а при отсутствии Docker предложит установить Docker Engine. Он установит панель в `/opt/amnezia-vpn-clients-monitor`, запустит её и проверит `/api/health`. Чтобы задать другой каталог или адрес архива, перед запуском скрипта установите `INSTALL_DIR` или `REPOSITORY_ARCHIVE_URL`.
+Установщик запросит имя контейнера AmneziaWG и порт панели, проверит Docker и Docker Compose, а при отсутствии Docker или плагина Docker Compose предложит их установить. Он установит панель в `/opt/amnezia-vpn-clients-monitor`, запустит её и проверит `/api/health`. Чтобы задать другой каталог или адрес архива, перед запуском скрипта установите `INSTALL_DIR` или `REPOSITORY_ARCHIVE_URL`.
 
 Скрипт скачивает текущее содержимое ветки `main`. Перед запуском на production-сервере ознакомьтесь с [install.sh](install.sh).
 

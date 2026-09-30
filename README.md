@@ -46,7 +46,7 @@ Run this command from a Linux terminal:
 curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/install.sh | bash
 ```
 
-The installer asks for the AmneziaWG container name and dashboard port, checks Docker and Docker Compose, and offers to install Docker Engine when it is missing. It installs the dashboard in `/opt/amnezia-vpn-clients-monitor`, starts it, and checks `/api/health`. To use another installation directory or source archive, set `INSTALL_DIR` or `REPOSITORY_ARCHIVE_URL` before running the script.
+The installer asks for the AmneziaWG container name and dashboard port, checks Docker and Docker Compose, and offers to install Docker Engine or the Docker Compose plugin when either is missing. It installs the dashboard in `/opt/amnezia-vpn-clients-monitor`, starts it, and checks `/api/health`. To use another installation directory or source archive, set `INSTALL_DIR` or `REPOSITORY_ARCHIVE_URL` before running the script.
 
 The script downloads the current `main` branch. Review [install.sh](install.sh) before running it, especially on a production server.
 

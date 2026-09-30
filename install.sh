@@ -52,6 +52,39 @@ install_docker() {
   fi
 }
 
+install_compose_plugin() {
+  if [[ ! -r /dev/tty ]]; then
+    fail 'Docker Compose plugin is missing and no terminal is available to confirm its installation.'
+  fi
+
+  local answer=''
+  read -r -p 'Docker Compose plugin is missing. Install the latest official plugin for all users? [y/N]: ' answer </dev/tty
+  [[ "$answer" =~ ^[Yy]$ ]] || fail 'Docker Compose plugin is required to continue.'
+
+  local architecture
+  case "$(uname -m)" in
+    x86_64) architecture='x86_64' ;;
+    aarch64 | arm64) architecture='aarch64' ;;
+    armv7l) architecture='armv7' ;;
+    *) fail "Unsupported CPU architecture: $(uname -m)." ;;
+  esac
+
+  local plugin_directory='/usr/local/lib/docker/cli-plugins'
+  local plugin_path="$plugin_directory/docker-compose"
+  local plugin_url="https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$architecture"
+
+  if [[ "$(id -u)" -eq 0 ]]; then
+    mkdir -p "$plugin_directory"
+    curl -fL "$plugin_url" -o "$plugin_path"
+    chmod 755 "$plugin_path"
+  else
+    require_command sudo
+    sudo mkdir -p "$plugin_directory"
+    curl -fL "$plugin_url" | sudo tee "$plugin_path" >/dev/null
+    sudo chmod 755 "$plugin_path"
+  fi
+}
+
 if [[ "$(uname -s)" != 'Linux' ]]; then
   fail 'This installer supports Linux only.'
 fi
@@ -64,7 +97,8 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 if ! docker compose version >/dev/null 2>&1; then
-  fail 'Docker Compose plugin is required. Install it and run the script again.'
+  install_compose_plugin
+  docker compose version >/dev/null 2>&1 || fail 'Docker Compose plugin could not be installed.'
 fi
 
 docker_command=(docker)
