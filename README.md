@@ -2,37 +2,9 @@
 
 A minimal read-only administrative dashboard that displays a current snapshot of clients from an existing AmneziaWG container. The application does not modify the VPN configuration or manage containers.
 
+![AmneziaVPN Clients Monitor dashboard](docs/images/amnezia-vpn-clients-monitor.jpg)
+
 Russian documentation: [README_ru.md](README_ru.md).
-
-## Architecture
-
-```text
-Browser → password login → signed session cookie
-        → React → authenticated GET /api/dashboard → Fastify → dockerode
-                                               ↘ SQLite traffic counters
-                                               ↓
-                                      /var/run/docker.sock
-                                               ↓
-                                         amnezia-awg2
-```
-
-Fastify and the compiled React application run in a single production container on `0.0.0.0:8080`. The backend performs only two predefined operations inside the target container:
-
-```text
-awg show awg0 dump
-cat /opt/amnezia/awg/clientsTable
-```
-
-Commands, the container name, and the interface name cannot be supplied through HTTP requests. Runtime data is matched with metadata strictly by `clientId === publicKey`. Traffic statistics are shown from the VPN client's perspective: AWG `txBytes` is download traffic and AWG `rxBytes` is upload traffic.
-
-The backend samples AWG counters in the background. Current counters are used as the initial monthly baseline, while daily accounting starts at zero on the first successful sample. Later counter deltas provide per-client daily and monthly download totals, aggregate daily traffic, and current download/upload rates. The latest nonzero handshake is also persisted so the `Connection` column survives application and VPN container restarts. Persisted handshakes are display history only; online status always comes from the current AWG state. The accounting day and calendar month follow `TZ`.
-
-## Requirements
-
-- Node.js 24 or newer and npm for development;
-- Docker with Compose for production deployments;
-- an existing AmneziaWG container, named `amnezia-awg2` by default;
-- access to `/var/run/docker.sock` on the Docker host.
 
 ## Installation
 
@@ -82,6 +54,36 @@ To disable automatic updates, run `sudo /opt/amnezia-vpn-clients-monitor/update.
 ```bash
 curl -fsSL https://raw.githubusercontent.com/victorlitvinenko/amnezia-vpn-clients-monitor/main/update.sh | bash -s -- --setup-auto-update
 ```
+
+## Architecture
+
+```text
+Browser → password login → signed session cookie
+        → React → authenticated GET /api/dashboard → Fastify → dockerode
+                                               ↘ SQLite traffic counters
+                                               ↓
+                                      /var/run/docker.sock
+                                               ↓
+                                         amnezia-awg2
+```
+
+Fastify and the compiled React application run in a single production container on `0.0.0.0:8080`. The backend performs only two predefined operations inside the target container:
+
+```text
+awg show awg0 dump
+cat /opt/amnezia/awg/clientsTable
+```
+
+Commands, the container name, and the interface name cannot be supplied through HTTP requests. Runtime data is matched with metadata strictly by `clientId === publicKey`. Traffic statistics are shown from the VPN client's perspective: AWG `txBytes` is download traffic and AWG `rxBytes` is upload traffic.
+
+The backend samples AWG counters in the background. Current counters are used as the initial monthly baseline, while daily accounting starts at zero on the first successful sample. Later counter deltas provide per-client daily and monthly download totals, aggregate daily traffic, and current download/upload rates. The latest nonzero handshake is also persisted so the `Connection` column survives application and VPN container restarts. Persisted handshakes are display history only; online status always comes from the current AWG state. The accounting day and calendar month follow `TZ`.
+
+## Requirements
+
+- Node.js 24 or newer and npm for development;
+- Docker with Compose for production deployments;
+- an existing AmneziaWG container, named `amnezia-awg2` by default;
+- access to `/var/run/docker.sock` on the Docker host.
 
 ## Authentication setup
 
